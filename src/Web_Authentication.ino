@@ -31,218 +31,174 @@ static uint8_t ip[] = {192, 168, 1, 210};
 #define PREFIX ""
 WebServer webserver(PREFIX, 80);
 
-void defaultCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
+void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
 {
-  Serial.println("default");
-  server.httpSuccess();
-  if (type != WebServer::HEAD)
-  {
-    P(helloMsg) = "<h1>Hello, World!</h1><a href=\"private.html\">Private page</a>";
-    server.printP(helloMsg);
-  }
-}
 
-void privateCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
-{
-  /* if the user has requested this page using the following credentials
-   * username = user
-   * password = user
-   * display a page saying "Hello User"
-   *
-   * the credentials have to be concatenated with a colon like
-   * username:password
-   * and encoded using Base64 - this should be done outside of your Arduino
-   * to be easy on your resources
-   *
-   * in other words: "dXNlcjp1c2Vy" is the Base64 representation of "user:user"
-   *
-   * if you need to change the username/password dynamically please search
-   * the web for a Base64 library */
-  if (server.checkCredentials("dXNlcjp1c2Vy"))
+  if (type == WebServer::GET)
   {
-    server.httpSuccess();
-    if (type != WebServer::HEAD)
+
+    if (server.checkCredentials("dXNlcjp1c2Vy"))
     {
-      P(helloMsg) = "<h1>Hello User</h1>";
-      server.printP(helloMsg);
+      server.httpSuccess();
+      if (type != WebServer::HEAD)
+      {
+        P(helloMsg) = "<h1>Hello User</h1>";
+        server.printP(helloMsg);
+      }
     }
-  }
   /* if the user has requested this page using the following credentials
    * username = admin
    * password = admin
-   * display a page saying "Hello Admin"
-   *
    * in other words: "YWRtaW46YWRtaW4=" is the Base64 representation of "admin:admin" */
-  else if (server.checkCredentials("YWRtaW46YWRtaW4="))
-  {
-    server.httpSuccess();
-    if (type != WebServer::HEAD)
+    else if (server.checkCredentials("YWRtaW46YWRtaW4="))
     {
-      P(helloMsg) =
-          "<HTML>\
-            <HEAD>\
-              <TITLE>Home Automation</TITLE>\
-              <center>\
-            </HEAD>\
-            <BODY>\
-              <H1>Home Automation</H1>\
-              <hr />\
-              <center>\
-              <a href=\"?pc1on\"\">PC1 on</a>\
-              <br />\
-              <a href=\"?pc1off\"\">PC1 off</a><br />\
-              <br />\
-              <br />\
-              <a href=\"?pc2on\"\">PC2 on</a>\
-              <br />\
-              <a href=\"?pc2off\"\">PC2 off</a><br />\
-              <br />\
-              <br />\
-              <a href=\"?fgt1on\"\">FGT1 on</a>\
-              <br />\
-              <a href=\"?fgt1off\"\">FGT1 off</a><br />\
-              <br />\
-              <br />\
-              <a href=\"?fgt2on\"\">FGT2 on</a>\
-              <br />\
-              <a href=\"?fgt2off\"\">FGT2 off</a><br />\
-              <br />\
-              <br />\
-            </BODY>\
-          </HTML>";
+      server.httpSuccess();
+      /* store the HTML in program memory using the P macro */
+      P(message) =
+          "<!DOCTYPE html><html><head>"
+          "<title>Webduino AJAX RGB Example</title>"
+          "<link href='http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/base/jquery-ui.css' rel=stylesheet />"
+          "<script src='http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js'></script>"
+          "<script src='http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js'></script>"
+          "<style>"
+          ".onoffswitch {"
+          "position: relative; width: 90px;"
+          "margin: 20px;"
+          "-webkit-user-select:none; -moz-user-select:none; -ms-user-select: none;"
+          "}"
+          ".onoffswitch-checkbox {"
+          "position: absolute;"
+          "opacity: 0;"
+          "pointer-events: none;"
+          "}"
+          ".onoffswitch-label {"
+          "display: block; overflow: hidden; cursor: pointer;"
+          "border: 2px solid #999999; border-radius: 20px;"
+          "}"
+          ".onoffswitch-inner {"
+          "display: block; width: 200%; margin-left: -100%;"
+          "transition: margin 0.3s ease-in 0s;"
+          "}"
+          ".onoffswitch-inner:before, .onoffswitch-inner:after {"
+          "display: block; float: left; width: 50%; height: 30px; padding: 0; line-height: 30px;"
+          "font-size: 14px; color: white; font-family: Trebuchet, Arial, sans-serif; font-weight: bold;"
+          "box-sizing: border-box;"
+          "}"
+          ".onoffswitch-inner:before {"
+          "content: \"ON\";"
+          "padding-left: 10px;"
+          "background-color: #34A7C1; color: #FFFFFF;"
+          "}"
+          ".onoffswitch-inner:after {"
+          "content: \"OFF\";"
+          "padding-right: 10px;"
+          "background-color: #EEEEEE; color: #999999;"
+          "text-align: right;"
+          "}"
+          ".onoffswitch-switch {"
+          "display: block; width: 18px; margin: 6px;"
+          "background: #FFFFFF;"
+          "position: absolute; top: 0; bottom: 0;"
+          "right: 56px;"
+          "border: 2px solid #999999; border-radius: 20px;"
+          "transition: all 0.3s ease-in 0s; "
+          "}"
+          ".onoffswitch-checkbox:checked + .onoffswitch-label .onoffswitch-inner {"
+          "margin-left: 0;"
+          "}"
+          ".onoffswitch-checkbox:checked + .onoffswitch-label .onoffswitch-switch {"
+          "right: 0px; "
+          "}"
+          "</style>"
+          "<script>"
 
-      //P(helloMsg) = page;
-      server.printP(helloMsg);
+          "function switchRelay(relaySwitch) {"
+            "console.log(relaySwitch.id);"
+            "console.log(\"test\");"
+            "alert(\"test\");"
+          "}"
+
+          "</script>"
+          "</head>"
+          "<body>"
+            "<div class=\"onoffswitch\">"
+              "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"outlet1\" tabindex=\"0\" checked onchange=\"switchRelay(this)\">"
+              "<label class=\"onoffswitch-label\" for=\"outlet1\">"
+                "<span class=\"onoffswitch-inner\"></span>"
+                "<span class=\"onoffswitch-switch\"></span>"
+              "</label>"
+            "</div>"
+            "<div class=\"onoffswitch\">"
+              "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"outlet2\" tabindex=\"0\" checked onchange=\"switchRelay(this)\">"
+              "<label class=\"onoffswitch-label\" for=\"outlet2\">"
+                "<span class=\"onoffswitch-inner\"></span>"
+                "<span class=\"onoffswitch-switch\"></span>"
+              "</label>"
+            "</div>"
+            "<div class=\"onoffswitch\">"
+              "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"outlet3\" tabindex=\"0\" checked onchange=\"switchRelay(this)\">"
+              "<label class=\"onoffswitch-label\" for=\"outlet3\">"
+                "<span class=\"onoffswitch-inner\"></span>"
+                "<span class=\"onoffswitch-switch\"></span>"
+              "</label>"
+            "</div>"
+            "<div class=\"onoffswitch\">"
+              "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"outlet4\" tabindex=\"0\" checked onchange=\"switchRelay(this)\">"
+              "<label class=\"onoffswitch-label\" for=\"outlet4\">"
+                "<span class=\"onoffswitch-inner\"></span>"
+                "<span class=\"onoffswitch-switch\"></span>"
+              "</label>"
+            "</div>"
+          "</body>"
+          "</html>";
+
+      server.printP(message);
+    }
+    else
+    {
+      /* send a 401 error back causing the web browser to prompt the user for credentials */
+      server.httpUnauthorized();
+    }
     }
   }
-  else
-  {
-    /* send a 401 error back causing the web browser to prompt the user for credentials */
-    server.httpUnauthorized();
-  }
 
-  EthernetClient client = server.available();
-  if (client)
+  void setup()
   {
-    while (client.connected())
+    //-------------------------------------------------------------------------------------------------------
+    // Init webserver
+    //-------------------------------------------------------------------------------------------------------
+    Ethernet.begin(mac, ip);
+    webserver.setDefaultCommand(&relayCmd);
+    webserver.begin();
+
+    //-------------------------------------------------------------------------------------------------------
+    // Init pins
+    //-------------------------------------------------------------------------------------------------------
+    pc1 = 1;
+    pc2 = 1;
+    fgt1 = 0;
+    fgt2 = 0;
+    // Extra Set up code:
+    for (unsigned pin = 0; pin < sizeof(relayPins) / sizeof(int); pin++)
     {
-      if (client.available())
-      {
-        char c = client.read();
-
-        //read char by char HTTP request
-        if (readString.length() < 100)
-
-        {
-
-          //store characters to string
-          readString += c;
-          //Serial.print(c);
-
-          Serial.write(c);
-          // if you've gotten to the end of the line (received a newline
-          // character) and the line is blank, the http request has ended,
-          // so you can send a reply
-          //if HTTP request has ended
-          if (c == '\n')
-          {
-            Serial.println(readString); //print to serial monitor for debuging
-
-            if (readString.indexOf("?pc1on") > 0) //checks for on
-            {
-              digitalWrite(2, HIGH); // set pin 2 high
-              Serial.println("PC1 on");
-            }
-            else if (readString.indexOf("?pc1off") > 0) //checks for off
-            {
-              digitalWrite(2, LOW); // set pin 2 low
-              Serial.println("PC1 off");
-            }
-
-            else if (readString.indexOf("?pc2on") > 0) //checks for on
-            {
-              digitalWrite(3, HIGH); // set pin 3 high
-              Serial.println("PC2 on");
-            }
-            else if (readString.indexOf("?pc2off") > 0) //checks for off
-            {
-              digitalWrite(3, LOW); // set pin 3 low
-              Serial.println("PC2 off");
-            }
-
-            else if (readString.indexOf("?fgt1on") > 0) //checks for on
-            {
-              digitalWrite(4, HIGH); // set pin 4 high
-              Serial.println("FGT1 on");
-            }
-            else if (readString.indexOf("?fgt1off") > 0) //checks for off
-            {
-              digitalWrite(4, LOW); // set pin 4 low
-              Serial.println("FGT1 off");
-            }
-
-            else if (readString.indexOf("?fgt2on") > 0) //checks for on
-            {
-              digitalWrite(6, HIGH); // set pin 5 high
-              Serial.println("FGT2 on");
-            }
-            else if (readString.indexOf("?fgt2off") > 0) //checks for off
-            {
-              digitalWrite(6, LOW); // set pin 5 low
-              Serial.println("FGT2 off");
-            }
-
-            //clearing string for next read
-            readString = "";
-
-            // give the web browser time to receive the data
-            delay(1);
-          }
-        }
-      }
+      pinMode(relayPins[pin], OUTPUT); //pin selected to control
+      // Serial.print("nit pin %d ", relayPins[pin]);
     }
+    //-------------------------------------------------------------------------------------------------------
+    //-------------------------------------------------------------------------------------------------------
+    //enable serial data print
+    Serial.begin(9600);
+
+    Serial.print("Server is at ");
+    Serial.println(Ethernet.localIP());
+    Serial.println("LED Controller Test 1.0");
   }
-}
 
-void setup()
-{
-  //-------------------------------------------------------------------------------------------------------
-  // Init webserver
-  //-------------------------------------------------------------------------------------------------------
-  Ethernet.begin(mac, ip);
-  webserver.setDefaultCommand(&defaultCmd);
-  webserver.addCommand("index.html", &defaultCmd);
-  webserver.addCommand("private.html", &privateCmd);
-  webserver.begin();
-
-  //-------------------------------------------------------------------------------------------------------
-  // Init pins
-  //-------------------------------------------------------------------------------------------------------
-  pc1 = 1;
-  pc2 = 1;
-  fgt1 = 0;
-  fgt2 = 0;
-  // Extra Set up code:
-  for (unsigned pin = 0; pin < sizeof(relayPins) / sizeof(int); pin++)
+  void loop()
   {
-    pinMode(relayPins[pin], OUTPUT); //pin selected to control
-    // Serial.print("nit pin %d ", relayPins[pin]);
+    char buff[64];
+    int len = 64;
+
+    /* process incoming connections one at a time forever */
+    webserver.processConnection(buff, &len);
   }
-  //-------------------------------------------------------------------------------------------------------
-  //-------------------------------------------------------------------------------------------------------
-  //enable serial data print
-  Serial.begin(9600);
-
-  Serial.print("Server is at ");
-  Serial.println(Ethernet.localIP());
-  Serial.println("LED Controller Test 1.0");
-}
-
-void loop()
-{
-  char buff[64];
-  int len = 64;
-
-  /* process incoming connections one at a time forever */
-  webserver.processConnection(buff, &len);
-}
