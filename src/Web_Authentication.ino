@@ -41,19 +41,19 @@ void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool) {
     if (repeat) {
       Serial.println(relayName);
       Serial.println(res);
-    }
-
-    if (strcmp(relayName, "pc1") != 0) {
-      digitalWrite(relayPins[0], atoi(res));
-    } else if (strcmp(relayName, "pc2") != 0) {
-      digitalWrite(relayPins[1], atoi(res));
-    } else if (strcmp(relayName, "pc1") != 0) {
-      digitalWrite(relayPins[2], atoi(res));
-    } else if (strcmp(relayName, "pc1") != 0) {
-      digitalWrite(relayPins[3], atoi(res));
+      if (strcmp(relayName, "pc1") == 0) {
+        digitalWrite(relayPins[0], atoi(res));
+      } else if (strcmp(relayName, "pc2") == 0) {
+        digitalWrite(relayPins[1], atoi(res));
+      } else if (strcmp(relayName, "fgt1") == 0) {
+        digitalWrite(relayPins[2], atoi(res));
+      } else if (strcmp(relayName, "fgt2") == 0) {
+        digitalWrite(relayPins[3], atoi(res));
+      }
     }
     server.httpSeeOther(PREFIX);
     return;
+
   }
   if (type == WebServer::GET) {
 
@@ -137,28 +137,28 @@ void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool) {
           "</head>"
           "<body>"
             "<div class=\"onoffswitch\">"
-              "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"outlet1\" tabindex=\"0\" checked onchange=\"switchRelay(this)\">"
+              "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"pc1\" tabindex=\"0\" checked onchange=\"switchRelay(this)\">"
               "<label class=\"onoffswitch-label\" for=\"outlet1\">"
                 "<span class=\"onoffswitch-inner\"></span>"
                 "<span class=\"onoffswitch-switch\"></span>"
               "</label>"
             "</div>"
             "<div class=\"onoffswitch\">"
-              "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"outlet2\" tabindex=\"0\" checked onchange=\"switchRelay(this)\">"
+              "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"pc2\" tabindex=\"0\" checked onchange=\"switchRelay(this)\">"
               "<label class=\"onoffswitch-label\" for=\"outlet2\">"
                 "<span class=\"onoffswitch-inner\"></span>"
                 "<span class=\"onoffswitch-switch\"></span>"
               "</label>"
             "</div>"
             "<div class=\"onoffswitch\">"
-              "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"outlet3\" tabindex=\"0\" checked onchange=\"switchRelay(this)\">"
+              "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"fgt1\" tabindex=\"0\" checked onchange=\"switchRelay(this)\">"
               "<label class=\"onoffswitch-label\" for=\"outlet3\">"
                 "<span class=\"onoffswitch-inner\"></span>"
                 "<span class=\"onoffswitch-switch\"></span>"
               "</label>"
             "</div>"
             "<div class=\"onoffswitch\">"
-              "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"outlet4\" tabindex=\"0\" checked onchange=\"switchRelay(this)\">"
+              "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"fgt2\" tabindex=\"0\" checked onchange=\"switchRelay(this)\">"
               "<label class=\"onoffswitch-label\" for=\"outlet4\">"
                 "<span class=\"onoffswitch-inner\"></span>"
                 "<span class=\"onoffswitch-switch\"></span>"
