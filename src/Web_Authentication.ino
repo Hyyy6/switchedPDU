@@ -31,17 +31,35 @@ static uint8_t ip[] = {192, 168, 1, 210};
 #define PREFIX ""
 WebServer webserver(PREFIX, 80);
 
-void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
-{
+void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool) {
+  if (type == WebServer::POST) {
+    char relayName[16], res[16];
+    bool repeat;
 
-  if (type == WebServer::GET)
-  {
+    repeat = server.readPOSTparam(relayName, 16, res, 16);
 
-    if (server.checkCredentials("dXNlcjp1c2Vy"))
-    {
+    if (repeat) {
+      Serial.println(relayName);
+      Serial.println(res);
+    }
+
+    if (strcmp(relayName, "pc1") != 0) {
+      digitalWrite(relayPins[0], atoi(res));
+    } else if (strcmp(relayName, "pc2") != 0) {
+      digitalWrite(relayPins[1], atoi(res));
+    } else if (strcmp(relayName, "pc1") != 0) {
+      digitalWrite(relayPins[2], atoi(res));
+    } else if (strcmp(relayName, "pc1") != 0) {
+      digitalWrite(relayPins[3], atoi(res));
+    }
+    server.httpSeeOther(PREFIX);
+    return;
+  }
+  if (type == WebServer::GET) {
+
+    if (server.checkCredentials("dXNlcjp1c2Vy")) {
       server.httpSuccess();
-      if (type != WebServer::HEAD)
-      {
+      if (type != WebServer::HEAD) {
         P(helloMsg) = "<h1>Hello User</h1>";
         server.printP(helloMsg);
       }
@@ -50,8 +68,7 @@ void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
    * username = admin
    * password = admin
    * in other words: "YWRtaW46YWRtaW4=" is the Base64 representation of "admin:admin" */
-    else if (server.checkCredentials("YWRtaW46YWRtaW4="))
-    {
+    else if (server.checkCredentials("YWRtaW46YWRtaW4=")) {
       server.httpSuccess();
       /* store the HTML in program memory using the P macro */
       P(message) =
@@ -60,6 +77,13 @@ void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
           "<link href='http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/base/jquery-ui.css' rel=stylesheet />"
           "<script src='http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js'></script>"
           "<script src='http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js'></script>"
+          "<script type='text/javascript'>"
+            "console.log('is this working?');"
+            "function switchRelay(relaySwitch) {"
+              "console.log(relaySwitch.id);"
+               "$.post('', { [relaySwitch.id]: relaySwitch.checked ? 1 : 0 });"
+            "}"
+          "</script>"
           "<style>"
           ".onoffswitch {"
           "position: relative; width: 90px;"
@@ -110,15 +134,6 @@ void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
           "right: 0px; "
           "}"
           "</style>"
-          "<script>"
-
-          "function switchRelay(relaySwitch) {"
-            "console.log(relaySwitch.id);"
-            "console.log(\"test\");"
-            "alert(\"test\");"
-          "}"
-
-          "</script>"
           "</head>"
           "<body>"
             "<div class=\"onoffswitch\">"
@@ -153,17 +168,14 @@ void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
           "</html>";
 
       server.printP(message);
-    }
-    else
-    {
+    } else {
       /* send a 401 error back causing the web browser to prompt the user for credentials */
       server.httpUnauthorized();
-    }
+      }
     }
   }
 
-  void setup()
-  {
+  void setup() {
     //-------------------------------------------------------------------------------------------------------
     // Init webserver
     //-------------------------------------------------------------------------------------------------------
@@ -179,8 +191,7 @@ void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
     fgt1 = 0;
     fgt2 = 0;
     // Extra Set up code:
-    for (unsigned pin = 0; pin < sizeof(relayPins) / sizeof(int); pin++)
-    {
+    for (unsigned pin = 0; pin < sizeof(relayPins) / sizeof(int); pin++) {
       pinMode(relayPins[pin], OUTPUT); //pin selected to control
       // Serial.print("nit pin %d ", relayPins[pin]);
     }
@@ -194,11 +205,10 @@ void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
     Serial.println("LED Controller Test 1.0");
   }
 
-  void loop()
-  {
-    char buff[64];
-    int len = 64;
+  void loop() {
+    // char buff[64];
+    // int len = 64;
 
     /* process incoming connections one at a time forever */
-    webserver.processConnection(buff, &len);
+    webserver.processConnection();
   }
