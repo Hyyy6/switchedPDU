@@ -10,69 +10,14 @@
 //-------------------------------------------------------------------------------------------------------
 String readString;
 int relayPins[] = {2, 3, 4, 6};
-int pc1 = 0;
-int pc2 = 0;
-int fgt1 = 0;
-int fgt2 = 0;
+// int pc1 = 0;
+// int pc2 = 0;
+// int fgt1 = 0;
+// int fgt2 = 0;
 
-/* CHANGE THIS TO YOUR OWN UNIQUE VALUE.  The MAC number should be
- * different from any other devices on your network or you'll have
- * problems receiving packets. */
-static uint8_t mac[] = {0xF9, 0x62, 0x30, 0x4C, 0x7D, 0x5C};
+int outletStates[4] = {1, 1, 0, 0};
 
-/* CHANGE THIS TO MATCH YOUR HOST NETWORK.  Most home networks are in
- * the 192.168.0.XXX or 192.168.1.XXX subrange.  Pick an address
- * that's not in use and isn't going to be automatically allocated by
- * DHCP from your router. */
-static uint8_t ip[] = {192, 168, 1, 210};
-
-/* This creates an instance of the webserver.  By specifying a prefix
- * of "", all pages will be at the root of the server. */
-#define PREFIX ""
-WebServer webserver(PREFIX, 80);
-
-void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool) {
-  if (type == WebServer::POST) {
-    char relayName[16], res[16];
-    bool repeat;
-
-    repeat = server.readPOSTparam(relayName, 16, res, 16);
-
-    if (repeat) {
-      Serial.println(relayName);
-      Serial.println(res);
-      if (strcmp(relayName, "pc1") == 0) {
-        digitalWrite(relayPins[0], atoi(res));
-      } else if (strcmp(relayName, "pc2") == 0) {
-        digitalWrite(relayPins[1], atoi(res));
-      } else if (strcmp(relayName, "fgt1") == 0) {
-        digitalWrite(relayPins[2], atoi(res));
-      } else if (strcmp(relayName, "fgt2") == 0) {
-        digitalWrite(relayPins[3], atoi(res));
-      }
-    }
-    server.httpSeeOther(PREFIX);
-    return;
-
-  }
-  if (type == WebServer::GET) {
-
-    if (server.checkCredentials("dXNlcjp1c2Vy")) {
-      server.httpSuccess();
-      if (type != WebServer::HEAD) {
-        P(helloMsg) = "<h1>Hello User</h1>";
-        server.printP(helloMsg);
-      }
-    }
-  /* if the user has requested this page using the following credentials
-   * username = admin
-   * password = admin
-   * in other words: "YWRtaW46YWRtaW4=" is the Base64 representation of "admin:admin" */
-    else if (server.checkCredentials("YWRtaW46YWRtaW4=")) {
-      server.httpSuccess();
-      /* store the HTML in program memory using the P macro */
-      P(message) =
-          "<!DOCTYPE html><html><head>"
+P(pageStart) = "<!DOCTYPE html><html><head>"
           "<title>Webduino AJAX RGB Example</title>"
           "<link href='http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/base/jquery-ui.css' rel=stylesheet />"
           "<script src='http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js'></script>"
@@ -135,39 +80,91 @@ void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool) {
           "}"
           "</style>"
           "</head>"
-          "<body>"
-            "<div class=\"onoffswitch\">"
-              "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"pc1\" tabindex=\"0\" checked onchange=\"switchRelay(this)\">"
-              "<label class=\"onoffswitch-label\" for=\"outlet1\">"
-                "<span class=\"onoffswitch-inner\"></span>"
-                "<span class=\"onoffswitch-switch\"></span>"
-              "</label>"
-            "</div>"
-            "<div class=\"onoffswitch\">"
-              "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"pc2\" tabindex=\"0\" checked onchange=\"switchRelay(this)\">"
-              "<label class=\"onoffswitch-label\" for=\"outlet2\">"
-                "<span class=\"onoffswitch-inner\"></span>"
-                "<span class=\"onoffswitch-switch\"></span>"
-              "</label>"
-            "</div>"
-            "<div class=\"onoffswitch\">"
-              "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"fgt1\" tabindex=\"0\" checked onchange=\"switchRelay(this)\">"
-              "<label class=\"onoffswitch-label\" for=\"outlet3\">"
-                "<span class=\"onoffswitch-inner\"></span>"
-                "<span class=\"onoffswitch-switch\"></span>"
-              "</label>"
-            "</div>"
-            "<div class=\"onoffswitch\">"
-              "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"fgt2\" tabindex=\"0\" checked onchange=\"switchRelay(this)\">"
-              "<label class=\"onoffswitch-label\" for=\"outlet4\">"
-                "<span class=\"onoffswitch-inner\"></span>"
-                "<span class=\"onoffswitch-switch\"></span>"
-              "</label>"
-            "</div>"
-          "</body>"
-          "</html>";
+          "<body>";
+P(switchHtmlStart) = "<div class=\"onoffswitch\">"
+                      "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"pc1\" tabindex=\"0\"";
+P(switchHtmlEnd) = "onchange=\"switchRelay(this)\">"
+                    "<label class=\"onoffswitch-label\" for=\"pc1\"><span class=\"onoffswitch-inner\"></span><span class=\"onoffswitch-switch\"></span>"
+                    "</label></div>";
+P(pageEnd) = "</body></html>";
 
-      server.printP(message);
+char* HtmlSwitchChecked(int outletIndex) {
+  char res[20];
+  if (outletStates[outletIndex]) {
+    sprintf(res, " checked = true ");
+  } else {
+    sprintf(res, " checked = false ");
+  }
+  return res;
+}
+/* CHANGE THIS TO YOUR OWN UNIQUE VALUE.  The MAC number should be
+ * different from any other devices on your network or you'll have
+ * problems receiving packets. */
+static uint8_t mac[] = {0xF9, 0x62, 0x30, 0x4C, 0x7D, 0x5C};
+
+/* CHANGE THIS TO MATCH YOUR HOST NETWORK.  Most home networks are in
+ * the 192.168.0.XXX or 192.168.1.XXX subrange.  Pick an address
+ * that's not in use and isn't going to be automatically allocated by
+ * DHCP from your router. */
+static uint8_t ip[] = {192, 168, 1, 210};
+
+/* This creates an instance of the webserver.  By specifying a prefix
+ * of "", all pages will be at the root of the server. */
+#define PREFIX ""
+WebServer webserver(PREFIX, 80);
+
+void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool) {
+  if (type == WebServer::POST) {
+    char relayName[16], res[16];
+    bool repeat;
+
+    repeat = server.readPOSTparam(relayName, 16, res, 16);
+
+    if (repeat) {
+      Serial.println(relayName);
+      Serial.println(res);
+      if (strcmp(relayName, "pc1") == 0) {
+        outletStates[0] = atoi(res);
+        digitalWrite(relayPins[0], outletStates[0]);
+      } else if (strcmp(relayName, "pc2") == 0) {
+        outletStates[1] = atoi(res);
+        digitalWrite(relayPins[1], outletStates[1]);
+      } else if (strcmp(relayName, "fgt1") == 0) {
+        outletStates[2] = atoi(res);
+        digitalWrite(relayPins[2], outletStates[2]);
+      } else if (strcmp(relayName, "fgt2") == 0) {
+        outletStates[3] = atoi(res);
+        digitalWrite(relayPins[3], outletStates[3]);
+      }
+    }
+    server.httpSeeOther(PREFIX);
+    return;
+
+  }
+  if (type == WebServer::GET) {
+
+    if (server.checkCredentials("dXNlcjp1c2Vy")) {
+      server.httpSuccess();
+      if (type != WebServer::HEAD) {
+        P(helloMsg) = "<h1>Hello User</h1>";
+        server.printP(helloMsg);
+      }
+    }
+  /* if the user has requested this page using the following credentials
+   * username = admin
+   * password = admin
+   * in other words: "YWRtaW46YWRtaW4=" is the Base64 representation of "admin:admin" */
+    else if (server.checkCredentials("YWRtaW46YWRtaW4=")) {
+      server.httpSuccess();
+      server.printP(pageStart);
+      for (int i = 0; i < 4; i++) {
+        server.printP(switchHtmlStart);
+        server.printP(HtmlSwitchChecked(i));
+        server.printP(switchHtmlEnd);
+      }
+      server.printP(pageEnd);
+
+      
     } else {
       /* send a 401 error back causing the web browser to prompt the user for credentials */
       server.httpUnauthorized();
@@ -186,10 +183,9 @@ void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool) {
     //-------------------------------------------------------------------------------------------------------
     // Init pins
     //-------------------------------------------------------------------------------------------------------
-    pc1 = 1;
-    pc2 = 1;
-    fgt1 = 0;
-    fgt2 = 0;
+    // void *a = memset(outletStates, 0, sizeof(outletStates));
+    // memset(outletStates, 0, sizeof(outletStates));
+    
     // Extra Set up code:
     for (unsigned pin = 0; pin < sizeof(relayPins) / sizeof(int); pin++) {
       pinMode(relayPins[pin], OUTPUT); //pin selected to control
