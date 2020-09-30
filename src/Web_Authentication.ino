@@ -9,13 +9,14 @@
 // Init outlet relay pins and state
 //-------------------------------------------------------------------------------------------------------
 String readString;
+char buf[128];
 int relayPins[] = {2, 3, 4, 6};
 // int pc1 = 0;
 // int pc2 = 0;
 // int fgt1 = 0;
 // int fgt2 = 0;
 
-int outletStates[4] = {1, 1, 0, 0};
+int outletStates[] = {1, 1, 1, 1};
 
 P(pageStart) = "<!DOCTYPE html><html><head>"
           "<title>Webduino AJAX RGB Example</title>"
@@ -82,19 +83,32 @@ P(pageStart) = "<!DOCTYPE html><html><head>"
           "</head>"
           "<body>";
 P(switchHtmlStart) = "<div class=\"onoffswitch\">"
-                      "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" id=\"pc1\" tabindex=\"0\"";
-P(switchHtmlEnd) = "onchange=\"switchRelay(this)\">"
-                    "<label class=\"onoffswitch-label\" for=\"pc1\"><span class=\"onoffswitch-inner\"></span><span class=\"onoffswitch-switch\"></span>"
+                      "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" ";
+P(switchHtmlEnd) = "<span class=\"onoffswitch-inner\"></span><span class=\"onoffswitch-switch\"></span>"
                     "</label></div>";
 P(pageEnd) = "</body></html>";
 
-char* HtmlSwitchChecked(int outletIndex) {
-  char res[20];
-  if (outletStates[outletIndex]) {
-    sprintf(res, " checked = true ");
-  } else {
-    sprintf(res, " checked = false ");
+char* HtmlSwitchChecked(char* res, int outletIndex) {
+  // char res[128];
+  char name[5];
+  switch (outletIndex) {
+    case 0:
+      sprintf(name, "pc1");
+      break;
+    case 1:
+      sprintf(name, "pc2");
+      break;
+    case 2:
+      sprintf(name, "fgt1");
+      break;
+    case 3:
+      sprintf(name, "fgt2");
+      break;
   }
+  sprintf(res, "id=\"%s\" tabindex=\"0\" %s onchange=\"switchRelay(this)\">\
+          <label class=\"onoffswitch-label\" for=\"%s\">",
+          name, outletStates[outletIndex] ? "checked " : " ", name);
+  Serial.println(res);
   return res;
 }
 /* CHANGE THIS TO YOUR OWN UNIQUE VALUE.  The MAC number should be
@@ -116,25 +130,26 @@ WebServer webserver(PREFIX, 80);
 void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool) {
   if (type == WebServer::POST) {
     char relayName[16], res[16];
+    int numRes;
     bool repeat;
 
     repeat = server.readPOSTparam(relayName, 16, res, 16);
-
+    numRes = atoi(res);
     if (repeat) {
       Serial.println(relayName);
-      Serial.println(res);
+      Serial.println(numRes);
       if (strcmp(relayName, "pc1") == 0) {
-        outletStates[0] = atoi(res);
-        digitalWrite(relayPins[0], outletStates[0]);
+        outletStates[0] = numRes;
+        digitalWrite(relayPins[0], outletStates[0] == 0 ? HIGH : LOW);
       } else if (strcmp(relayName, "pc2") == 0) {
-        outletStates[1] = atoi(res);
-        digitalWrite(relayPins[1], outletStates[1]);
+        outletStates[1] = numRes;
+        digitalWrite(relayPins[1], outletStates[1] == 0 ? HIGH : LOW);
       } else if (strcmp(relayName, "fgt1") == 0) {
-        outletStates[2] = atoi(res);
-        digitalWrite(relayPins[2], outletStates[2]);
+        outletStates[2] = numRes;
+        digitalWrite(relayPins[2], outletStates[2] == 0 ? HIGH : LOW);
       } else if (strcmp(relayName, "fgt2") == 0) {
-        outletStates[3] = atoi(res);
-        digitalWrite(relayPins[3], outletStates[3]);
+        outletStates[3] = numRes;
+        digitalWrite(relayPins[3], outletStates[3] == 0 ? HIGH : LOW);
       }
     }
     server.httpSeeOther(PREFIX);
@@ -157,14 +172,19 @@ void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool) {
     else if (server.checkCredentials("YWRtaW46YWRtaW4=")) {
       server.httpSuccess();
       server.printP(pageStart);
+
       for (int i = 0; i < 4; i++) {
+        char *switchParams = HtmlSwitchChecked(buf, i);
+        Serial.println(switchParams);
+
+
         server.printP(switchHtmlStart);
-        server.printP(HtmlSwitchChecked(i));
+        server.print(switchParams);
         server.printP(switchHtmlEnd);
       }
       server.printP(pageEnd);
 
-      
+
     } else {
       /* send a 401 error back causing the web browser to prompt the user for credentials */
       server.httpUnauthorized();
