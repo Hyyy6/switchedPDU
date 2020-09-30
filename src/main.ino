@@ -114,13 +114,13 @@ char *HtmlSwitchChecked(char *res, int outletIndex)
 	sprintf(res, "id=\"%s\" tabindex=\"0\" %s onchange=\"switchRelay(this)\">\
           <label class=\"onoffswitch-label\" for=\"%s\">",
 			name, outletStates[outletIndex] ? "checked " : " ", name);
-	Serial.println(res);
+	// Serial.println(res);
 	return res;
 }
 
-/* set ip dynamically */
 int readCommands()
 {
+	/* set ip dynamically */
 	if (Serial.available() > 0 && editing == false)
 	{
 		inputChar = Serial.read();
@@ -128,12 +128,9 @@ int readCommands()
 		{
 			readString += inputChar;
 			Serial.println("help or setip");
-			// editing = true;
-			// delay(3000);
 			readString += Serial.readStringUntil('\n');
 			readString.trim();
 			Serial.print(readString.length());
-			// Serial.println(readString);
 
 			if (readString == "help" || readString == "h")
 			{
@@ -142,46 +139,22 @@ int readCommands()
 			}
 			else if (readString == "setip")
 			{
-				// inputChar = 0;
 				editing = true;
-				// Serial.println(readString);
-				// readString = "";
-				// Serial.println(readString);
 				while (editing == true) {
 					if (Serial.available() > 0) {
-						// inputChar = Serial.read();
-						// Serial.print(inputChar);
-						// if (inputChar == '\n') {
-						// 	editing = false;
-						// 	break;
-						// } else {
-						// 	readString += inputChar;
-						// }
 						readString = Serial.readStringUntil('\n');
 						readString.trim();
 						editing = false;
 					}
 				}
-				// readString += '\0';
-				// readString = Serial.readStringUntil('\n');
-				// readString.trim();
 				Serial.println(readString);
-				// if (readString.length() >= 8)
-				// {
-					// Serial.print(ipAddr);
-					// readString.toCharArray(buf, sizeof(buf));
-					// Serial.println(buf);
-					bool res = ipAddr.fromString(readString);
-					// Serial.print(res);
-					// Serial.print(ipAddr);
-					// if (!ipAddr.fromString(readString))
-					if (res == false)
-					{
-						Serial.println("Wrong ip");
-						Serial.println(readString);
-						return -1;
-					}
-				// }
+				bool res = ipAddr.fromString(readString);
+				if (res == false)
+				{
+					Serial.println("Wrong ip");
+					Serial.println(readString);
+					return -1;
+				}
 				Serial.println(ipAddr);
 				Ethernet.begin(mac, ipAddr);
 				readString = "";
@@ -297,7 +270,9 @@ void setup()
 	for (unsigned pin = 0; pin < sizeof(relayPins) / sizeof(int); pin++)
 	{
 		pinMode(relayPins[pin], OUTPUT); //pin selected to control
-										 // Serial.print("nit pin %d ", relayPins[pin]);
+		digitalWrite(relayPins[pin], outletStates[pin] == 1 ? HIGH : LOW);
+		sprintf(buf, "pin - %d, state - %d", relayPins[pin], outletStates[pin]);
+		Serial.println(buf);
 	}
 	//-------------------------------------------------------------------------------------------------------
 	//-------------------------------------------------------------------------------------------------------
