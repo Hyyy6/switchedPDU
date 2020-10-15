@@ -17,11 +17,14 @@ int relayPins[] = {2, 3, 4, 6};
 int outletStates[] = {1, 1, 1, 1};
 static uint8_t mac[] = {0xF9, 0x62, 0x30, 0x4C, 0x7D, 0x5C};
 // static uint8_t ip[] = {192, 168, 1, 210}; /* ip is set dinamically through serial */
-IPAddress ipAddr(172, 16, 79, 203);
+IPAddress ipAddr(172, 16, 78, 200);
+IPAddress gateway(172, 16, 78, 1);
+IPAddress dns(172, 16, 100, 100);
+
 bool editing = false;
 
 P(pageStart) = "<!DOCTYPE html><html><head>"
-			   "<title>Webduino AJAX RGB Example</title>"
+			   "<title>Remote power control unit</title>"
 			   "<link href='http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/base/jquery-ui.css' rel=stylesheet />"
 			   "<script src='http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js'></script>"
 			   "<script src='http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js'></script>"
@@ -127,14 +130,13 @@ int readCommands()
 		if ((inputChar >= 'A' && inputChar <= 'Z') || (inputChar >= 'a' && inputChar <= 'z'))
 		{
 			readString += inputChar;
-			Serial.println("help or setip");
+			Serial.println("help?");
 			readString += Serial.readStringUntil('\n');
 			readString.trim();
-			Serial.print(readString.length());
 
 			if (readString == "help" || readString == "h")
 			{
-				Serial.println("setip to set ip");
+				Serial.println("getip or setip");
 				readString = "";
 			}
 			else if (readString == "setip")
@@ -156,9 +158,15 @@ int readCommands()
 					return -1;
 				}
 				Serial.println(ipAddr);
-				Ethernet.begin(mac, ipAddr);
+				Ethernet.begin(mac, ipAddr, dns, gateway);
 				readString = "";
 				return 0;
+			} 
+			else if (readString == "getip")
+			{
+					Serial.print("Server is at ");
+					Serial.println(Ethernet.localIP());
+					return 0;
 			}
 			else
 			{
@@ -173,7 +181,7 @@ int readCommands()
 /* This creates an instance of the webserver.  By specifying a prefix
  * of(r?) "", all pages will be at the root of the server. */
 #define PREFIX ""
-WebServer webserver(PREFIX, 80);
+WebServer webserver(PREFIX, 1234);
 
 void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
 {
@@ -225,6 +233,7 @@ void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
 				server.printP(helloMsg);
 			}
 		}
+
 		/* if the user has requested this page using the following credentials
 		* username = admin
 		* password = admin
@@ -259,7 +268,8 @@ void setup()
 	//-------------------------------------------------------------------------------------------------------
 	// Init webserver
 	//-------------------------------------------------------------------------------------------------------
-	Ethernet.begin(mac, ipAddr);
+	Ethernet.begin(mac, ipAddr, dns, gateway);
+	// Ethernet.begin(mac);
 	webserver.setDefaultCommand(&relayCmd);
 	webserver.begin();
 
