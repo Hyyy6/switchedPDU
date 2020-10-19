@@ -17,7 +17,7 @@ int relayPins[] = {2, 3, 4, 6};
 int outletStates[] = {1, 1, 1, 1};
 static uint8_t mac[] = {0xF9, 0x62, 0x30, 0x4C, 0x7D, 0x5C};
 // static uint8_t ip[] = {192, 168, 1, 210}; /* ip is set dinamically through serial */
-IPAddress ipAddr(172, 16, 78, 200);
+IPAddress ipAddr(172, 16, 78, 147);
 IPAddress gateway(172, 16, 78, 1);
 IPAddress dns(172, 16, 100, 100);
 
