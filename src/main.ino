@@ -15,9 +15,9 @@ char inputChar;
 char buf[128];
 int relayPins[] = {2, 3, 4, 6};
 int outletStates[] = {1, 1, 1, 1};
-static uint8_t mac[] = {0xF9, 0x62, 0x30, 0x4C, 0x7D, 0x5C};
+static uint8_t mac[] = {0xF9, 0x62, 0x30, 0x4C, 0x7D, 0xC5};
 // static uint8_t ip[] = {192, 168, 1, 210}; /* ip is set dinamically through serial */
-IPAddress ipAddr(172, 16, 78, 147);
+IPAddress ipAddr(172, 16, 78, 159);
 IPAddress gateway(172, 16, 78, 1);
 IPAddress dns(172, 16, 100, 100);
 
@@ -126,11 +126,14 @@ int readCommands()
 	/* set ip dynamically */
 	if (Serial.available() > 0 && editing == false)
 	{
+
 		inputChar = Serial.read();
 		if ((inputChar >= 'A' && inputChar <= 'Z') || (inputChar >= 'a' && inputChar <= 'z'))
 		{
+			Serial.println("help or h to see list of available commands.");
+
+			
 			readString += inputChar;
-			Serial.println("help?");
 			readString += Serial.readStringUntil('\n');
 			readString.trim();
 
@@ -141,6 +144,7 @@ int readCommands()
 			}
 			else if (readString == "setip")
 			{
+				Serial.println("Enter IP:");
 				editing = true;
 				while (editing == true) {
 					if (Serial.available() > 0) {
