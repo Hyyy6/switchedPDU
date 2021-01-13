@@ -268,12 +268,25 @@ void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
 
 void setup()
 {
+	//enable serial data print
+	Serial.begin(9600);
+	while (!Serial); // wait for serial port
+	if (!SD.begin(4)) {
+		Serial.println("Failed to initialize SD card.");
+		return;
+	}
 	// debug_init();
 	//-------------------------------------------------------------------------------------------------------
 	// Init webserver
 	//-------------------------------------------------------------------------------------------------------
-	Ethernet.begin(mac, ipAddr, dns, gateway);
-	// Ethernet.begin(mac);
+	Serial.println("Initializing with DHCP...");
+	if (Ethernet.begin(mac) == 0) {
+		Serial.println("Failed to configure with DHCP, using defined parameters.");
+		Ethernet.begin(mac, ipAddr, dns, gateway);
+
+		if (Ethernet.hardwareStatus() == EthernetNoHardware || Ethernet.linkStatus() == LinkOFF)
+			Serial.println("Hardware issue.");
+	}
 	webserver.setDefaultCommand(&relayCmd);
 	webserver.begin();
 
@@ -290,8 +303,6 @@ void setup()
 	}
 	//-------------------------------------------------------------------------------------------------------
 	//-------------------------------------------------------------------------------------------------------
-	//enable serial data print
-	Serial.begin(9600);
 	// gdbstub_init();
 	Serial.print("Server is at ");
 	Serial.println(Ethernet.localIP());
