@@ -3,24 +3,39 @@
 // #include <app_api.h>
 // #include <avr8-stub.h>
 #include <Arduino.h>
-#include "SPI.h"
 #include "Ethernet.h"
 #include "WebServer.h"
+#include "ArduinoJson.h"
+#include "millisDelay.h"
 
 //-------------------------------------------------------------------------------------------------------
 // Init outlet relay pins and state
 //-------------------------------------------------------------------------------------------------------
 String readString;
+millisDelay updateDelay;
+int tmp = 0;
 char inputChar;
 char buf[128];
 int relayPins[] = {2, 3, 4, 6};
 int outletStates[] = {1, 1, 1, 1};
+// static uint8_t mac[] = {0xAA, 0xBB, 0xCC, 0xEE, 0xFF, 0x44};
+// static uint8_t mac[] = {0xCC, 0x40, 0xD0, 0xD6, 0x6D, 0x09};
 static uint8_t mac[] = {0xF9, 0x62, 0x30, 0x4C, 0x7D, 0xC5};
-// static uint8_t ip[] = {192, 168, 1, 210}; /* ip is set dinamically through serial */
-IPAddress ipAddr(172, 16, 78, 159);
-IPAddress gateway(172, 16, 78, 1);
-IPAddress dns(172, 16, 100, 100);
+// static uint8_t mac[] = {0xF9, 0x62, 0x30, 0x4C, 0x7D, 0xC5};
+// static uint8_t mac[] = {0x9C, 0x5A, 0x44, 0xF3, 0xD5, 0xFE};
 
+// static uint8_t ip[] = {192, 168, 1, 210}; /* ip is set dinamically through serial */
+// IPAddress ipAddr(172, 16, 78, 159);
+// IPAddress gateway(172, 16, 78, 1);
+// IPAddress dns(172, 16, 100, 100);
+IPAddress ipAddr(10, 0, 1, 12);
+IPAddress gateway(192, 168, 1, 1);
+IPAddress dns(8, 8, 8, 8);
+
+EthernetClient client;
+// P(updSrvAddr) = "localhost/api/spduAPI";
+byte updSrvAddr[] = {192, 168, 0, 114};
+int srvPort = 7071;
 bool editing = false;
 
 P(pageStart) = "<!DOCTYPE html><html><head>"
@@ -121,74 +136,77 @@ char *HtmlSwitchChecked(char *res, int outletIndex)
 	return res;
 }
 
-int readCommands()
-{
-	/* set ip dynamically */
-	if (Serial.available() > 0 && editing == false)
-	{
+// int readCommands()
+// {
+// 	/* set ip dynamically */
+// 	if (Serial.available() > 0 && editing == false)
+// 	{
 
-		inputChar = Serial.read();
-		if ((inputChar >= 'A' && inputChar <= 'Z') || (inputChar >= 'a' && inputChar <= 'z'))
-		{
-			Serial.println("help or h to see list of available commands.");
+// 		inputChar = Serial.read();
+// 		if ((inputChar >= 'A' && inputChar <= 'Z') || (inputChar >= 'a' && inputChar <= 'z'))
+// 		{
+// 			Serial.println("help or h to see list of available commands.");
 
 			
-			readString += inputChar;
-			readString += Serial.readStringUntil('\n');
-			readString.trim();
+// 			readString += inputChar;
+// 			readString += Serial.readStringUntil('\n');
+// 			readString.trim();
 
-			if (readString == "help" || readString == "h")
-			{
-				Serial.println("getip or setip");
-				readString = "";
-			}
-			else if (readString == "setip")
-			{
-				Serial.println("Enter IP:");
-				editing = true;
-				while (editing == true) {
-					if (Serial.available() > 0) {
-						readString = Serial.readStringUntil('\n');
-						readString.trim();
-						editing = false;
-					}
-				}
-				Serial.println(readString);
-				bool res = ipAddr.fromString(readString);
-				if (res == false)
-				{
-					Serial.println("Wrong ip");
-					Serial.println(readString);
-					return -1;
-				}
-				Serial.println(ipAddr);
-				Ethernet.begin(mac, ipAddr, dns, gateway);
-				readString = "";
-				return 0;
-			} 
-			else if (readString == "getip")
-			{
-					Serial.print("Server is at ");
-					Serial.println(Ethernet.localIP());
-					return 0;
-			}
-			else
-			{
-				readString = "";
-				return -1;
-			}
-		}
-	}
-	return -1;
-}
+// 			if (readString == "help" || readString == "h")
+// 			{
+// 				Serial.println("getip or setip");
+// 				readString = "";
+// 			}
+// 			else if (readString == "setip")
+// 			{
+// 				Serial.println("Enter IP:");
+// 				editing = true;
+// 				while (editing == true) {
+// 					if (Serial.available() > 0) {
+// 						readString = Serial.readStringUntil('\n');
+// 						readString.trim();
+// 						editing = false;
+// 					}
+// 				}
+// 				Serial.println(readString);
+// 				bool res = ipAddr.fromString(readString);
+// 				if (res == false)
+// 				{
+// 					Serial.println("Wrong ip");
+// 					Serial.println(readString);
+// 					return -1;
+// 				}
+// 				Serial.println(ipAddr);
+// 				Ethernet.begin(mac, ipAddr, dns, gateway);
+// 				readString = "";
+// 				return 0;
+// 			} 
+// 			else if (readString == "getip")
+// 			{
+// 					Serial.print("Server is at ");
+// 					Serial.println(Ethernet.localIP());
+// 					return 0;
+// 			}
+// 			else
+// 			{
+// 				readString = "";
+// 				return -1;
+// 			}
+// 		}
+// 	}
+// 	return -1;
+// }
 
 /* This creates an instance of the webserver.  By specifying a prefix
  * of(r?) "", all pages will be at the root of the server. */
 #define PREFIX ""
 WebServer webserver(PREFIX, 1234);
+// EthernetServer eserver(1234);
 
 void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
 {
+	// while(tmp);
+
 	if (type == WebServer::POST)
 	{
 		char relayName[16], res[16];
@@ -227,22 +245,11 @@ void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
 	}
 	if (type == WebServer::GET)
 	{
-
-		if (server.checkCredentials("dXNlcjp1c2Vy"))
-		{
-			server.httpSuccess();
-			if (type != WebServer::HEAD)
-			{
-				P(helloMsg) = "<h1>Hello User</h1>";
-				server.printP(helloMsg);
-			}
-		}
-
 		/* if the user has requested this page using the following credentials
 		* username = admin
 		* password = admin
 		* in other words: "YWRtaW46YWRtaW4=" is the Base64 representation of "admin:admin" */
-		else if (server.checkCredentials("YWRtaW46YWRtaW4="))
+		if (server.checkCredentials("YWRtaW46YWRtaW4="))
 		{
 			server.httpSuccess();
 			server.printP(pageStart);
@@ -266,26 +273,62 @@ void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
 	}
 }
 
+void sendUpdate(IPAddress ip) {
+	// webserver.reset();
+	// IPAddress *localip;
+	sprintf(buf, "{\"password\": \"secpass123\",\"name\": \"ard\",\"payload\": {\"deviceName\": \"arduino\",\"ipAddress\": \"%d.%d.%d.%d\",}}\0", ip[0], ip[1], ip[2], ip[3]);
+	Serial.println(buf);
+	if (client.connect(updSrvAddr, srvPort)) {
+		if (client.connected())
+			Serial.println("connected");
+
+		Serial.println("sending addr upd");
+
+		client.println("PUT /api/spduAPI HTTP/1.1");
+		client.print("Host: ");
+		client.println("192.168.0.114:7071");
+		client.println("User-Agent: Arduino/1.0");
+		client.println("Connection: close");
+		client.println("Content-Type: application/x-www-form-urlencoded;");
+		client.print("Content-Length: ");
+		client.println(strlen(buf));
+		client.println();
+		client.println(buf);
+	} else {
+		Serial.println("could not connect to update server");
+	}
+	tmp = 0;
+	client.stop();
+	// webserver.begin();
+	return;
+}
+
 void setup()
 {
 	//enable serial data print
+	tmp = 0;
 	Serial.begin(9600);
 	while (!Serial); // wait for serial port
-	if (!SD.begin(4)) {
-		Serial.println("Failed to initialize SD card.");
-		return;
-	}
+begin:
+	// if (!SD.begin(4)) {
+	// 	Serial.println("Failed to initialize SD card.");
+	// 	return;
+	// }
 	// debug_init();
 	//-------------------------------------------------------------------------------------------------------
 	// Init webserver
 	//-------------------------------------------------------------------------------------------------------
 	Serial.println("Initializing with DHCP...");
+	// W5100.getMACAddress((uint8_t*)&tmp);
+	// Serial.println(tmp);
 	if (Ethernet.begin(mac) == 0) {
 		Serial.println("Failed to configure with DHCP, using defined parameters.");
 		Ethernet.begin(mac, ipAddr, dns, gateway);
 
-		if (Ethernet.hardwareStatus() == EthernetNoHardware || Ethernet.linkStatus() == LinkOFF)
+		if (Ethernet.hardwareStatus() == EthernetNoHardware)
 			Serial.println("Hardware issue.");
+			delay(5000);
+			goto begin;
 	}
 	webserver.setDefaultCommand(&relayCmd);
 	webserver.begin();
@@ -307,14 +350,27 @@ void setup()
 	Serial.print("Server is at ");
 	Serial.println(Ethernet.localIP());
 
+	updateDelay.start(15000);
+	Serial.println(updateDelay.remaining());
 }
 
 void loop()
 {
 	// Serial.println("loop");
-	readCommands();
+	// readCommands();
 	// Serial.println(res);
-
+	// Serial.println(updateDelay.remaining());
+	if (updateDelay.justFinished()) {
+		// tmp = 1;
+		Serial.println("Delay");
+		sendUpdate(Ethernet.localIP());
+		updateDelay.start(15000);
+		// tmp = 0;
+	}
+	// }
 	/* process incoming connections one at a time forever */
-	webserver.processConnection();
+	else {
+		// if (!tmp)
+		webserver.processConnection();
+	}
 }
