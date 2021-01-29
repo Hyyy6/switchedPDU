@@ -1,12 +1,11 @@
 /* Remotely controllable relay with authentitication */
 
-// #include <app_api.h>
-// #include <avr8-stub.h>
 #include <Arduino.h>
 #include "Ethernet.h"
 #include "WebServer.h"
 #include "ArduinoJson.h"
 #include "millisDelay.h"
+#include <SPI.h>
 
 //-------------------------------------------------------------------------------------------------------
 // Init outlet relay pins and state
@@ -15,291 +14,84 @@ String readString;
 millisDelay updateDelay;
 int tmp = 0;
 char inputChar;
-char buf[128];
+char buf[256];
 int relayPins[] = {2, 3, 4, 6};
 int outletStates[] = {1, 1, 1, 1};
-// static uint8_t mac[] = {0xAA, 0xBB, 0xCC, 0xEE, 0xFF, 0x44};
-// static uint8_t mac[] = {0xCC, 0x40, 0xD0, 0xD6, 0x6D, 0x09};
 static uint8_t mac[] = {0xF9, 0x62, 0x30, 0x4C, 0x7D, 0xC5};
-// static uint8_t mac[] = {0xF9, 0x62, 0x30, 0x4C, 0x7D, 0xC5};
-// static uint8_t mac[] = {0x9C, 0x5A, 0x44, 0xF3, 0xD5, 0xFE};
-
-// static uint8_t ip[] = {192, 168, 1, 210}; /* ip is set dinamically through serial */
-// IPAddress ipAddr(172, 16, 78, 159);
-// IPAddress gateway(172, 16, 78, 1);
-// IPAddress dns(172, 16, 100, 100);
 IPAddress ipAddr(10, 0, 1, 12);
 IPAddress gateway(192, 168, 1, 1);
 IPAddress dns(8, 8, 8, 8);
 
-EthernetClient client;
-// P(updSrvAddr) = "localhost/api/spduAPI";
+EthernetClient updClient;
+EthernetServer swServer(80);
 byte updSrvAddr[] = {192, 168, 0, 114};
 int srvPort = 7071;
-bool editing = false;
-
-P(pageStart) = "<!DOCTYPE html><html><head>"
-			   "<title>Remote power control unit</title>"
-			   "<link href='http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/base/jquery-ui.css' rel=stylesheet />"
-			   "<script src='http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js'></script>"
-			   "<script src='http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js'></script>"
-			   "<script type='text/javascript'>"
-			   "console.log('is this working?');"
-			   "function switchRelay(relaySwitch) {"
-			   "console.log(relaySwitch.id);"
-			   "$.post('', { [relaySwitch.id]: relaySwitch.checked ? 1 : 0 });"
-			   "}"
-			   "</script>"
-			   "<style>"
-			   ".onoffswitch {"
-			   "position: relative; width: 90px;"
-			   "margin: 20px;"
-			   "-webkit-user-select:none; -moz-user-select:none; -ms-user-select: none;"
-			   "}"
-			   ".onoffswitch-checkbox {"
-			   "position: absolute;"
-			   "opacity: 0;"
-			   "pointer-events: none;"
-			   "}"
-			   ".onoffswitch-label {"
-			   "display: block; overflow: hidden; cursor: pointer;"
-			   "border: 2px solid #999999; border-radius: 20px;"
-			   "}"
-			   ".onoffswitch-inner {"
-			   "display: block; width: 200%; margin-left: -100%;"
-			   "transition: margin 0.3s ease-in 0s;"
-			   "}"
-			   ".onoffswitch-inner:before, .onoffswitch-inner:after {"
-			   "display: block; float: left; width: 50%; height: 30px; padding: 0; line-height: 30px;"
-			   "font-size: 14px; color: white; font-family: Trebuchet, Arial, sans-serif; font-weight: bold;"
-			   "box-sizing: border-box;"
-			   "}"
-			   ".onoffswitch-inner:before {"
-			   "content: \"ON\";"
-			   "padding-left: 10px;"
-			   "background-color: #34A7C1; color: #FFFFFF;"
-			   "}"
-			   ".onoffswitch-inner:after {"
-			   "content: \"OFF\";"
-			   "padding-right: 10px;"
-			   "background-color: #EEEEEE; color: #999999;"
-			   "text-align: right;"
-			   "}"
-			   ".onoffswitch-switch {"
-			   "display: block; width: 18px; margin: 6px;"
-			   "background: #FFFFFF;"
-			   "position: absolute; top: 0; bottom: 0;"
-			   "right: 56px;"
-			   "border: 2px solid #999999; border-radius: 20px;"
-			   "transition: all 0.3s ease-in 0s; "
-			   "}"
-			   ".onoffswitch-checkbox:checked + .onoffswitch-label .onoffswitch-inner {"
-			   "margin-left: 0;"
-			   "}"
-			   ".onoffswitch-checkbox:checked + .onoffswitch-label .onoffswitch-switch {"
-			   "right: 0px; "
-			   "}"
-			   "</style>"
-			   "</head>"
-			   "<body>";
-
-/* store common switch html code parts on onboard memory to free up RAM */
-P(switchHtmlStart) = "<div class=\"onoffswitch\">"
-					 "<input type=\"checkbox\" name=\"onoffswitch\" class=\"onoffswitch-checkbox\" ";
-P(switchHtmlEnd) = "<span class=\"onoffswitch-inner\"></span><span class=\"onoffswitch-switch\"></span>"
-				   "</label></div>";
-P(pageEnd) = "</body></html>";
-
-/* get string with html for (un)checked switch based on relay state */
-char *HtmlSwitchChecked(char *res, int outletIndex)
-{
-	char name[5];
-	switch (outletIndex)
-	{
-	case 0:
-		sprintf(name, "pc1");
-		break;
-	case 1:
-		sprintf(name, "pc2");
-		break;
-	case 2:
-		sprintf(name, "fgt1");
-		break;
-	case 3:
-		sprintf(name, "fgt2");
-		break;
-	}
-	sprintf(res, "id=\"%s\" tabindex=\"0\" %s onchange=\"switchRelay(this)\">\
-          <label class=\"onoffswitch-label\" for=\"%s\">",
-			name, outletStates[outletIndex] ? "checked " : " ", name);
-	// Serial.println(res);
-	return res;
-}
-
-// int readCommands()
-// {
-// 	/* set ip dynamically */
-// 	if (Serial.available() > 0 && editing == false)
-// 	{
-
-// 		inputChar = Serial.read();
-// 		if ((inputChar >= 'A' && inputChar <= 'Z') || (inputChar >= 'a' && inputChar <= 'z'))
-// 		{
-// 			Serial.println("help or h to see list of available commands.");
-
-			
-// 			readString += inputChar;
-// 			readString += Serial.readStringUntil('\n');
-// 			readString.trim();
-
-// 			if (readString == "help" || readString == "h")
-// 			{
-// 				Serial.println("getip or setip");
-// 				readString = "";
-// 			}
-// 			else if (readString == "setip")
-// 			{
-// 				Serial.println("Enter IP:");
-// 				editing = true;
-// 				while (editing == true) {
-// 					if (Serial.available() > 0) {
-// 						readString = Serial.readStringUntil('\n');
-// 						readString.trim();
-// 						editing = false;
-// 					}
-// 				}
-// 				Serial.println(readString);
-// 				bool res = ipAddr.fromString(readString);
-// 				if (res == false)
-// 				{
-// 					Serial.println("Wrong ip");
-// 					Serial.println(readString);
-// 					return -1;
-// 				}
-// 				Serial.println(ipAddr);
-// 				Ethernet.begin(mac, ipAddr, dns, gateway);
-// 				readString = "";
-// 				return 0;
-// 			} 
-// 			else if (readString == "getip")
-// 			{
-// 					Serial.print("Server is at ");
-// 					Serial.println(Ethernet.localIP());
-// 					return 0;
-// 			}
-// 			else
-// 			{
-// 				readString = "";
-// 				return -1;
-// 			}
-// 		}
-// 	}
-// 	return -1;
-// }
-
-/* This creates an instance of the webserver.  By specifying a prefix
- * of(r?) "", all pages will be at the root of the server. */
-#define PREFIX ""
-WebServer webserver(PREFIX, 1234);
-// EthernetServer eserver(1234);
-
-void relayCmd(WebServer &server, WebServer::ConnectionType type, char *, bool)
-{
-	// while(tmp);
-
-	if (type == WebServer::POST)
-	{
-		char relayName[16], res[16];
-		int numRes;
-		bool repeat;
-
-		repeat = server.readPOSTparam(relayName, 16, res, 16);
-		numRes = atoi(res);
-		if (repeat)
-		{
-			Serial.println(relayName);
-			Serial.println(numRes);
-			if (strcmp(relayName, "pc1") == 0)
-			{
-				outletStates[0] = numRes;
-				digitalWrite(relayPins[0], outletStates[0] == 1 ? HIGH : LOW);
-			}
-			else if (strcmp(relayName, "pc2") == 0)
-			{
-				outletStates[1] = numRes;
-				digitalWrite(relayPins[1], outletStates[1] == 1 ? HIGH : LOW);
-			}
-			else if (strcmp(relayName, "fgt1") == 0)
-			{
-				outletStates[2] = numRes;
-				digitalWrite(relayPins[2], outletStates[2] == 1 ? HIGH : LOW);
-			}
-			else if (strcmp(relayName, "fgt2") == 0)
-			{
-				outletStates[3] = numRes;
-				digitalWrite(relayPins[3], outletStates[3] == 1 ? HIGH : LOW);
-			}
-		}
-		server.httpSeeOther(PREFIX);
-		return;
-	}
-	if (type == WebServer::GET)
-	{
-		/* if the user has requested this page using the following credentials
-		* username = admin
-		* password = admin
-		* in other words: "YWRtaW46YWRtaW4=" is the Base64 representation of "admin:admin" */
-		if (server.checkCredentials("YWRtaW46YWRtaW4="))
-		{
-			server.httpSuccess();
-			server.printP(pageStart);
-
-			for (int i = 0; i < 4; i++)
-			{
-				char *switchParams = HtmlSwitchChecked(buf, i);
-				Serial.println(switchParams);
-
-				server.printP(switchHtmlStart);
-				server.print(switchParams);
-				server.printP(switchHtmlEnd);
-			}
-			server.printP(pageEnd);
-		}
-		else
-		{
-			/* send a 401 error back causing the web browser to prompt the user for credentials */
-			server.httpUnauthorized();
-		}
-	}
-}
 
 void sendUpdate(IPAddress ip) {
 	// webserver.reset();
 	// IPAddress *localip;
 	sprintf(buf, "{\"password\": \"secpass123\",\"name\": \"ard\",\"payload\": {\"deviceName\": \"arduino\",\"ipAddress\": \"%d.%d.%d.%d\",}}\0", ip[0], ip[1], ip[2], ip[3]);
 	Serial.println(buf);
-	if (client.connect(updSrvAddr, srvPort)) {
-		if (client.connected())
+	if (updClient.connect(updSrvAddr, srvPort)) {
+		if (updClient.connected())
 			Serial.println("connected");
 
 		Serial.println("sending addr upd");
 
-		client.println("PUT /api/spduAPI HTTP/1.1");
-		client.print("Host: ");
-		client.println("192.168.0.114:7071");
-		client.println("User-Agent: Arduino/1.0");
-		client.println("Connection: close");
-		client.println("Content-Type: application/x-www-form-urlencoded;");
-		client.print("Content-Length: ");
-		client.println(strlen(buf));
-		client.println();
-		client.println(buf);
+		updClient.println("PUT /api/spduAPI HTTP/1.1");
+		updClient.print("Host: ");
+		updClient.println("192.168.0.114:7071");
+		updClient.println("User-Agent: Arduino/1.0");
+		updClient.println("Connection: close");
+		updClient.println("Content-Type: application/x-www-form-urlencoded;");
+		updClient.print("Content-Length: ");
+		updClient.println(strlen(buf));
+		updClient.println();
+		updClient.println(buf);
 	} else {
 		Serial.println("could not connect to update server");
 	}
 	tmp = 0;
-	client.stop();
+	updClient.stop();
+	// updClient.
 	// webserver.begin();
+	return;
+}
+
+void procSwitchReq(void) 
+{
+	EthernetClient client = swServer.available();
+	String req;
+	memset(buf, 0, sizeof(buf));
+	if (client) {
+		while (client.connected()) {
+			if (client.available()) {
+				client.readBytes(buf, sizeof(buf));
+				// client.find("Content-Length:");
+				// client.find("\r\n\r\n");
+				// client.find("\"name\":\"");
+				// int outlet = client.parseInt();
+				// client.find("\"state\":\"");
+				// int state = client.parseInt();
+
+
+				// sprintf(buf, "name - %d\nstate - %d", outlet, state);
+				Serial.println(buf);
+
+
+				delay(1);
+				client.println("HTTP/1.1 200 OK");
+				client.println("Content-Type: text/html");
+				client.println("Connection: close");
+				// client.println("Connection: Keep-Alive");
+				// client.println("Keep-Alive: timeout=5, max=5");
+				// client.println("\nOK");
+			}
+		}
+	}
+	delay(1);
+	client.stop();
+	delay(1);
 	return;
 }
 
@@ -330,8 +122,8 @@ begin:
 			delay(5000);
 			goto begin;
 	}
-	webserver.setDefaultCommand(&relayCmd);
-	webserver.begin();
+	// webserver.setDefaultCommand(&relayCmd);
+	// webserver.begin();
 
 	//-------------------------------------------------------------------------------------------------------
 	// Init pins
@@ -352,6 +144,7 @@ begin:
 
 	updateDelay.start(15000);
 	Serial.println(updateDelay.remaining());
+	swServer.begin();
 }
 
 void loop()
@@ -361,6 +154,7 @@ void loop()
 	// Serial.println(res);
 	// Serial.println(updateDelay.remaining());
 	if (updateDelay.justFinished()) {
+		swServer.flush();
 		// tmp = 1;
 		Serial.println("Delay");
 		sendUpdate(Ethernet.localIP());
@@ -369,8 +163,5 @@ void loop()
 	}
 	// }
 	/* process incoming connections one at a time forever */
-	else {
-		// if (!tmp)
-		webserver.processConnection();
-	}
+	procSwitchReq();
 }
