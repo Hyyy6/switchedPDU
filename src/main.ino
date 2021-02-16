@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include "Ethernet.h"
 #include "WebServer.h"
-#include "ArduinoJson.h"
+// #include "ArduinoJson.h"
 #include "millisDelay.h"
 #include <SPI.h>
 #include "Crypto.h"
@@ -90,7 +90,7 @@ void sendUpdate(IPAddress ip) {
 		updClient.println(buf);
 		delay(10);
 	} else {
-		Serial.println("could not connect to update server");
+		Serial.println(F("could not connect to update server"));
 	}
 	tmp = 0;
 	updClient.stop();
@@ -147,7 +147,7 @@ void procSwitchReq(void)
 void printArr(uint8_t *arr) {
 	int i;
 	int size = sizeof(arr);
-	Serial.print("size of array: ");
+	// Serial.print("size of array: ");
 	Serial.println(size);
 	for (i = 0; i < size; i++) {
 		Serial.print(arr[i]);
@@ -171,15 +171,15 @@ void setup()
 	//-------------------------------------------------------------------------------------------------------
 	// Init webserver
 	//-------------------------------------------------------------------------------------------------------
-	Serial.println("Initializing with DHCP...");
+	Serial.println(F("Initializing with DHCP..."));
 	// W5100.getMACAddress((uint8_t*)&tmp);
 	// Serial.println(tmp);
 	if (Ethernet.begin(mac) == 0) {
-		Serial.println("Failed to configure with DHCP, using defined parameters.");
+		Serial.println(F("Failed to configure with DHCP, using defined parameters."));
 		Ethernet.begin(mac, ipAddr, dns, gateway);
 
 		if (Ethernet.hardwareStatus() == EthernetNoHardware)
-			Serial.println("Hardware issue.");
+			Serial.println(F("Hardware issue."));
 			delay(5000);
 			goto begin;
 	}
@@ -200,7 +200,7 @@ void setup()
 	//-------------------------------------------------------------------------------------------------------
 	//-------------------------------------------------------------------------------------------------------
 	// gdbstub_init();
-	Serial.print("Server is at ");
+	Serial.print(F("Server is at "));
 	Serial.println(Ethernet.localIP());
 
 	updateDelay.start(15000);
@@ -217,7 +217,7 @@ void loop()
 	if (updateDelay.justFinished()) {
 		swServer.flush();
 		// tmp = 1;
-		Serial.println("Delay");
+		Serial.println(F("Delay"));
 		sendUpdate(Ethernet.localIP());
 		updateDelay.start(15000);
 		// tmp = 0;
