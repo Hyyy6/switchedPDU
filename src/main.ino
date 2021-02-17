@@ -21,7 +21,7 @@ millisDelay updateDelay;
 int tmp = 0;
 char inputChar;
 char buf[256];
-byte aesBuf[256];
+// byte aesBuf[256];
 int relayPins[] = {2, 3, 4, 6};
 int outletStates[] = {1, 1, 1, 1};
 static uint8_t mac[] = {0xF9, 0x62, 0x30, 0x4C, 0x7D, 0xC5};
@@ -31,7 +31,7 @@ IPAddress dns(8, 8, 8, 8);
 
 EthernetClient updClient;
 EthernetServer swServer(1234);
-byte updSrvAddr[] = {192, 168, 0, 114};
+byte updSrvAddr[] = {192, 168, 0, 113};
 int srvPort = 7071;
 
 AES aes128;
@@ -44,25 +44,57 @@ void encrypt() {
 void sendUpdate(IPAddress ip) {
 	// webserver.reset();
 	// IPAddress *localip;
+	byte *msg;
+	int ilength = 0, plength = 0, tlength = 0;
 	memset(buf, 0, sizeof(buf));
-	sprintf(buf, "{\"password\": \"secpass123\",\"name\": \"ard\",\"payload\": {\"deviceName\": \"arduino\",\"ipAddress\": \"%d.%d.%d.%d\",}}\0", ip[0], ip[1], ip[2], ip[3]);
+	sprintf(buf, "{\"password\": \"secpass123\",\"name\": \"ard\",\"reason_to_hate\": \"padding size\",\"payload\": {\"deviceName\": \"arduino\",\"ipAddress\": \"%d.%d.%d.%d\",}}", ip[0], ip[1], ip[2], ip[3]);
+
+	tmp = sizeof(buf) - 1;
+	while(tmp && !buf[tmp]) {
+		tmp--;
+	}
+	tmp += 1; //size of msg;
+	ilength = tmp;
+	// int end = tmp;
+	Serial.println(F("Start sendUpdate"));
+	Serial.print(F("size of message - "));
+	Serial.println(ilength);
+	if (((ilength) % 16) == 0) {
+		Serial.print(F("message fits int number of blocks of 16 - "));
+		Serial.println(ilength);
+		msg = (byte*)malloc(ilength);
+	} else {
+		Serial.print(F("message will be padded to int number of blocks of 16 - "));
+		plength = ((ilength/16) + 1)*16 - ilength;
+		// Serial.println();
+		msg = (byte*)malloc(ilength + plength);
+	}
+	tlength = ilength + plength;
+	if (!msg) {
+		Serial.println("Not enough memory.\n");
+		return;
+	}
+	Serial.println(tlength);
+	memset(msg, 0, tlength);
+	memcpy(msg, buf, tlength);
+	/*PKCS7 padding*/
+	for (int end = ilength; end < tlength; end++) {
+		msg[end] = plength;
+	}
+	// Serial.printf("n-2 = %x; n-1 = %x\n", buf[sizeof(buf) - 2], buf[sizeof(buf) - 1]);
+	Serial.write(msg, tlength);
+	Serial.println();
 
 	const uint8_t *key = "abcdefghijklmnop";
 	byte iv[N_BLOCK];
 	memcpy(iv, key, N_BLOCK);
-	// String test = "abcd";
-	// uint8_t *test_input;
-	// test_input = (uint8_t *)malloc(sizeof(test.c_str()));
-	// memset(test_input, 1, sizeof(test_input));
-	// snprintf((char *)test_input, sizeof(test_input), test);
-	// byte test_buf[128];
 	aes128.clean();
 	aes128.set_key((byte *)key, 16);
 	// aes128.encryptBlock(test_buf, (uint8_t *)test.c_str());
 	// aes128.~BlockCipher
 	// Serial.println(test);
 	// printArr(test_buf);
-	Serial.println(F("...encrypt...\n...decrypt..."));
+	Serial.println(F("...encrypt..."));
 
 	// aes128.decryptBlock(test_input, test_buf);
 	// printArr(test_input);
@@ -70,19 +102,24 @@ void sendUpdate(IPAddress ip) {
 	// test.getBytes(test_buf, sizeof(test_buf));
 	// printArr(test_buf);
 	
-	Serial.println(buf);
+	// Serial.write(msg, tlength);
 
-	memcpy(aesBuf, buf, sizeof(buf));
-	Serial.println((char *)aesBuf);
-	memset(aesBuf, 0, sizeof(aesBuf));
-	aes128.cbc_encrypt((uint8_t *)buf, (byte *)aesBuf, 16, iv);
-	Serial.write((char *)aesBuf, sizeof(aesBuf));
+	// memcpy(aesBuf, buf, sizeof(buf));
+	// Serial.println((char *)aesBuf);
+	// memset(aesBuf, 0, sizeof(aesBuf));
+	aes128.cbc_encrypt(msg, (byte *)buf, 16, iv);
+	Serial.write((char *)buf, tlength);
 	Serial.println();
 	
 	if (updClient.connect(updSrvAddr, srvPort)) {
 		if (updClient.connected())
 			Serial.println(F("connected"));
 
+		updClient.flush();
+		if (!updClient.availableForWrite()) {
+			Serial.println(F("Client err."));
+			return;
+		}
 		Serial.println(F("sending addr upd"));
 
 		updClient.println("PUT /api/spduAPI HTTP/1.1");
@@ -92,14 +129,14 @@ void sendUpdate(IPAddress ip) {
 		updClient.println("Connection: close");
 		updClient.println("Content-Type: application/x-www-form-urlencoded;");
 		updClient.print("Content-Length: ");
-		
-		Serial.print("aesBuf length - ");
-		Serial.println(sizeof(aesBuf));
 
-		updClient.println(sizeof(aesBuf));
+		Serial.print("msg length - ");
+		Serial.println(tlength);
+
+		updClient.println(tlength);
 		updClient.println();
 		// updClient.println((char *)aesBuf);
-		updClient.write(aesBuf, sizeof(aesBuf));
+		updClient.write(buf, tlength);
 		// updClient.println();
 		delay(10);
 	} else {
@@ -109,6 +146,15 @@ void sendUpdate(IPAddress ip) {
 	updClient.stop();
 	// updClient.
 	// webserver.begin();
+	
+	memcpy(iv, key, N_BLOCK);
+	aes128.clean();
+	aes128.set_key((byte *)key, 16);
+	Serial.println(F("...decrypt..."));
+	aes128.cbc_decrypt((byte*)buf,  msg, 16, iv);
+	Serial.write(msg, tlength);
+	Serial.println();
+	free(msg);
 	return;
 }
 
