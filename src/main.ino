@@ -6,7 +6,6 @@
 // #include "ArduinoJson.h"
 #include "millisDelay.h"
 #include <SPI.h>
-// #include "Crypto.h"
 #include "AES.h"
 #include "avr/wdt.h"
 // #include "sercerts.h"
@@ -169,6 +168,8 @@ int sendUpdate(IPAddress ip) {
 	Serial.println("\nafter set before enc");
 	encrypt((byte *)msg, tlength);
 	
+	delay(5);
+	// Serial.println(F("connect..."));
 	if (updClient.connect(updSrvAddr, srvPort)) {
 		if (updClient.connected())
 			Serial.println(F("connected"));
@@ -280,9 +281,6 @@ void procSwitchReq(void)
 
 				delay(5);
 				client.stop();
-				// client.println("Connection: Keep-Alive");
-				// client.println("Keep-Alive: timeout=5, max=5");
-				// client.println("\nOK");
 			}
 		}
 	}
@@ -334,8 +332,6 @@ void setup()
 	// Init webserver
 	//-------------------------------------------------------------------------------------------------------
 	Serial.println(F("Initializing with DHCP..."));
-	// W5100.getMACAddress((uint8_t*)&tmp);
-	// Serial.println(tmp);
 	if (Ethernet.begin(mac) == 0) {
 		Serial.println(F("Failed to configure with DHCP, using defined parameters."));
 		// Ethernet.begin(mac, ipAddr, dns, gateway);
@@ -346,8 +342,6 @@ void setup()
 		delay(5000);
 		goto begin;
 	}
-	// webserver.setDefaultCommand(&relayCmd);
-	// webserver.begin();
 
 	//-------------------------------------------------------------------------------------------------------
 	// Init pins
@@ -357,8 +351,6 @@ void setup()
 	{
 		pinMode(relayPins[pin], OUTPUT); //pin selected to control
 		digitalWrite(relayPins[pin], outletStates[pin] == 1 ? HIGH : LOW);
-		// sprintf(buf, "pin - %d, state - %d", relayPins[pin], outletStates[pin]);
-		// Serial.println(buf);
 	}
 	//-------------------------------------------------------------------------------------------------------
 	//-------------------------------------------------------------------------------------------------------
@@ -373,13 +365,8 @@ void setup()
 
 void loop()
 {
-	// Serial.println("loop");
-	// readCommands();
-	// Serial.println(res);
-	// Serial.println(updateDelay.remaining());
 	if (updateDelay.justFinished()) {
 		swServer.flush();
-		// tmp = 1;
 		Serial.println(F("Delay"));
 		tmp = sendUpdate(Ethernet.localIP());
 		Serial.println(tmp);
