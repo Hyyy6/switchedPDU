@@ -20,8 +20,8 @@ static const char aesKey_out[] = "abcdefghijklmnop";
 millisDelay updateDelay;
 int tmp = 0;
 char inputChar;
-char buf[256];
-char msg[256];
+char buf[170];
+char msg[170];
 byte iv[N_BLOCK];
 int *intBlock = (int *)iv;
 // byte aesBuf[256];
@@ -42,19 +42,28 @@ AES aes128;
 int getRandomBlock(byte *block) {
 	if (!block)
 		return -1;
+	delay(1);
+	memset(iv, 0, 17);
 	randomSeed(updateDelay.remaining());
 	for (int i = 0; i < 4; i++) {
 		intBlock[i] = random(RAND_MAX);
 	}
+	Serial.print("random block of 16: ");
+	for (int i = 0; i < 16; i++) {
+		Serial.print((char)iv[i]);
+		if (iv[i] == 0)
+			iv[i] = 1;
+	}
+	Serial.println();
 	return 0;
 }
 
 int encrypt(byte *msg, int tlength) {
-	const uint8_t *key = "abcdefghijklmnop";
+	// const uint8_t *key = "abcdefghijklmnop";
 	// memcpy(iv, key, N_BLOCK);
 	getRandomBlock(iv);
 	aes128.clean();
-	aes128.set_key((byte *)key, 16);
+	aes128.set_key((byte *)aesKey_in, 16);
 	Serial.println(F("...encrypt..."));
 	aes128.cbc_encrypt(msg, (byte *)buf, 16, iv);
 	Serial.write((char *)buf, tlength);
@@ -66,8 +75,11 @@ int setMsg(byte *msg, IPAddress ip) {
 	int ilength = 0, plength = 0, tlength = 0;
 	memset(buf, 0, sizeof(buf));
 	getRandomBlock(iv);
-	sprintf(buf, "{\"password\": \"secpass123\",\"name\": \"ard\",\"payload\": {\"deviceName\": \"arduino\",\"ipAddress\": \"%d.%d.%d.%d\",\"key\": \"%d%d%d%d\"}}", ip[0], ip[1], ip[2], ip[3], intBlock[0], intBlock[1], intBlock[2], intBlock[3]);
-
+	// sprintf(buf, "{\"password\": \"secpass123\",\"name\": \"ard\",\"payload\": {\"deviceName\": \"arduino\",\"ipAddress\": \"%d.%d.%d.%d\",\"key\": \"%s\"}}", ip[0], ip[1], ip[2], ip[3], iv);
+	memset(buf, 0, sizeof(buf));
+	tmp = sprintf(buf, "{\"password\": \"secpass123\",\"name\": \"ard\",\"payload\": {\"deviceName\": \"arduino\",\"ipAddress\": \"%d.%d.%d.%d\",\"key\": \"", ip[0], ip[1], ip[2], ip[3]);
+	memcpy(buf + tmp, iv, 16);
+	memcpy_P(buf + tmp + 16, F("\"}}"), 3);
 	tmp = sizeof(buf) - 1;
 	while(tmp && !buf[tmp]) {
 		tmp--;
