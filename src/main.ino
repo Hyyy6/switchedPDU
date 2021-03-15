@@ -8,6 +8,7 @@
 #include <SPI.h>
 // #include "Crypto.h"
 #include "AES.h"
+#include "avr/wdt.h"
 // #include "sercerts.h"
 
 static const char aesKey_in[] = "abcdefghijklmnop";
@@ -26,7 +27,7 @@ char msg[128];
 byte iv[N_BLOCK], ivInit[N_BLOCK];
 int *intBlock = (int *)iv;
 // byte aesBuf[256];
-int relayPins[] = {2, 3, 4, 6};
+int relayPins[] = {6, 7, 8, 9};
 int outletStates[] = {1, 1, 1, 1};
 static uint8_t mac[] = {0xF9, 0x62, 0x30, 0x4C, 0x7D, 0xC5};
 // IPAddress ipAddr(10, 0, 1, 12);
@@ -141,6 +142,7 @@ int setMsg(byte *msg, IPAddress ip) {
 	/*PKCS7 padding*/
 	Serial.print("PKCS7 padding - fill with ");
 	Serial.print(plength);
+	Serial.println();
 	for (int end = ilength; end < tlength; end++) {
 		Serial.print(end);
 		msg[end] = plength;
@@ -201,6 +203,7 @@ int sendUpdate(IPAddress ip) {
 			return -2;
 
 		Serial.println(F("could not connect to update server"));
+		Serial.println(fail_count);
 		fail_count++;
 	}
 	tmp = 0;
@@ -221,6 +224,9 @@ int sendUpdate(IPAddress ip) {
 
 void procSwitchReq(void) 
 {
+	int outlet = -1;
+	int state = -1;
+	tmp = -1;
 	EthernetClient client = swServer.available();
 	// String req;
 	memset(buf, 0, sizeof(buf));
@@ -236,22 +242,38 @@ void procSwitchReq(void)
 				// client.readBytes(buf, sizeof(buf));
 				client.find("Content-Length:");
 				client.find("\r\n\r\n");
-				client.find("\"name\":\"");
-				int outlet = client.parseInt();
-				client.find("\"state\":\"");
-				int state = client.parseInt();
+				// client.find("\"");
+				// client.readBytesUntil(0, buf, sizeof(buf));
+				// Serial.println(buf);
+				client.find("\"name\":");
+				outlet = client.parseInt();
+				client.find("\"state\":");
+				state = client.parseInt();
 
 
-				sprintf(buf, "name - %d\nstate - %d", outlet, state);
+				sprintf(buf, "outlet - %d\nstate - %d", outlet, state);
 				Serial.println(buf);
 
+				if ((outlet > -1 && outlet < 4) && (state == 0 || state == 1)) {
+					tmp = 0;
+					outletStates[outlet] = state;
+					digitalWrite(relayPins[outlet], state);
+				}
 
 				delay(5);
-				client.println("HTTP/1.1 200 OK");
+				if (!tmp)
+					client.println("HTTP/1.1 200 OK");
+				else
+					client.println("HTTP/1.1 400 Bad Request");
 				client.println("Content-Type: text/html");
 				client.println("Connection: close");
 				client.println();
-				client.println("success");
+				if (!tmp) {
+					client.print("successfully updated ");
+				} else {
+					client.print("failed to update ");
+				}
+				client.write(buf);
 				client.println();
 				// snprintf(buf, sizeof(buf), "Changed outlet #%d to \"%s\"", outlet, state ? "On" : "Off");
 				Serial.println(buf);
@@ -267,6 +289,8 @@ void procSwitchReq(void)
 	delay(1);
 	client.stop();
 	delay(1);
+	memset(buf, 0, sizeof(buf));
+	memset(msg, 0, sizeof(msg));
 	return;
 }
 
@@ -281,10 +305,19 @@ void procSwitchReq(void)
 // 	Serial.print(F("\n"));
 // }
 
-void(* resetFunc)(void) = 0;
+// void(* resetFunc)(void) = 0;
+void resetFunc() {
+	Serial.println(F("reset..."));
+	wdt_enable(WDTO_15MS);
+	while(1);
+}
 
 void setup()
 {
+	// digitalWrite(4, HIGH);
+	// delay(200);
+	// pinMode(4, OUTPUT);
+	MCUSR = 0;
 	//enable serial data print
 	tmp = 0;
 	Serial.begin(9600);
@@ -349,6 +382,7 @@ void loop()
 		// tmp = 1;
 		Serial.println(F("Delay"));
 		tmp = sendUpdate(Ethernet.localIP());
+		Serial.println(tmp);
 		if (tmp == -2 && fail_count > 1) {
 			Serial.println("too many fails.. restart..");
 			resetFunc();
