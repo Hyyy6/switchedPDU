@@ -8,10 +8,13 @@
 #include <SPI.h>
 #include "AES.h"
 #include "avr/wdt.h"
+#include "base64.hpp"
 // #include "sercerts.h"
 
-static const char aesKey_in[] = "abcdefghijklmnop";
+char aesKey_in_new[] = "abcdefghijklmnop";
+char aesKey_in_old[] = "abcdefghijklmnop";
 static const char aesKey_out[] = "abcdefghijklmnop";
+bool is_debug = true;
 
 //-------------------------------------------------------------------------------------------------------
 // Init outlet relay pins and state
@@ -36,7 +39,12 @@ IPAddress dns(8, 8, 8, 8);
 EthernetClient updClient;
 EthernetServer swServer(1234);
 byte updSrvAddr[] = {192, 168, 0, 113};
-int srvPort = 7071;
+static const char conn_string[] = "hosts.spduapi.azurewebsites.net";
+static const char host[] = "spduapi.azurewebsites.net";
+byte *conTarget;
+
+// int srvPort = 8071;
+int srvPort = 80;
 
 AES aes128;
 
@@ -61,7 +69,6 @@ int getRandomBlock(byte *block) {
 		return -1;
 	delay(1);
 	memset(iv, 0, 16); //setting 17 bytes overwrites msg
-	randomSeed(updateDelay.remaining());
 	for (int i = 0; i < 4; i++) {
 		intBlock[i] = random(RAND_MAX);
 	}
@@ -107,9 +114,17 @@ int setMsg(byte *msg, IPAddress ip) {
 	// sprintf(buf, "{\"password\": \"secpass123\",\"name\": \"ard\",\"payload\": {\"deviceName\": \"arduino\",\"ipAddress\": \"%d.%d.%d.%d\",\"key\": \"%s\"}}", ip[0], ip[1], ip[2], ip[3], iv);
 	// memset(buf, 0, sizeof(buf));
 	tmp = sprintf(buf, "{\"password\": \"secpass123\",\"ipAddress\": \"%d.%d.%d.%d\",\"key\": \"", ip[0], ip[1], ip[2], ip[3]);
+	ilength = encode_base64(iv, 16, msg);
+
+	// printArr(iv, 16);
+	// printArr(msg, ilength);
+	// plength = decode_base64(msg, ilength, iv);
+	// printArr(iv, 16);
+
+
 	Serial.println(tmp);
-	memcpy(&buf[tmp], iv, 16);
-	tmp = tmp + sizeof(iv);
+	memcpy(&buf[tmp], msg, ilength);
+	tmp = tmp + ilength;
 	memcpy(&buf[tmp], "\"}", 2);
 	tmp = sizeof(buf) - 1;
 	while(tmp && !buf[tmp]) {
@@ -139,7 +154,7 @@ int setMsg(byte *msg, IPAddress ip) {
 	memset(msg, 0, tlength);
 	memcpy(msg, buf, tlength);
 	/*PKCS7 padding*/
-	Serial.print("PKCS7 padding - fill with ");
+	Serial.print(F("PKCS7 padding - fill with "));
 	Serial.print(plength);
 	Serial.println();
 	for (int end = ilength; end < tlength; end++) {
@@ -165,14 +180,38 @@ int sendUpdate(IPAddress ip) {
 		return -1;
 	}
 	Serial.write(msg, tlength);
-	Serial.println("\nafter set before enc");
+	// Serial.println("\nafter set before enc");
 	encrypt((byte *)msg, tlength);
 	
-	delay(5);
+	updClient.flush();
+	delay(100);
 	// Serial.println(F("connect..."));
-	if (updClient.connect(updSrvAddr, srvPort)) {
-		if (updClient.connected())
-			Serial.println(F("connected"));
+	tmp = 0;
+	while (tmp < 10) {
+		// if (!updClient.connect(updSrvAddr, srvPort)) {
+		// if (!updClient.connect(conn_string, srvPort)) {
+		if (is_debug) {
+			conTarget = updSrvAddr;
+		} else {
+			conTarget = (byte *)conn_string;
+		}
+		conTarget = (byte *)conn_string;
+		if (!updClient.connect(conn_string, srvPort)) {
+			delay(100);
+			tmp++;
+			Serial.print(F("retry "));
+			Serial.println(tmp);
+		} else {
+			break;
+		}
+	}
+	if (updClient.connected()) {
+		memset(msg, 0, sizeof(msg));
+		// tmp = sprintf(msg, "%d.%d.%d.%d", updClient.remoteIP()[0], updClient.remoteIP()[1], updClient.remoteIP()[2], updClient.remoteIP()[3]);
+		// Serial.println(msg);
+		delay(100);
+		// if (updClient.connected())
+		Serial.println(F("connected"));
 
 		updClient.flush();
 		if (!updClient.availableForWrite()) {
@@ -183,7 +222,11 @@ int sendUpdate(IPAddress ip) {
 
 		updClient.println("PUT /api/spduAPI HTTP/1.1");
 		updClient.print("Host: ");
-		updClient.println("192.168.0.114:7071");
+		// updClient.println("192.168.0.114:7071");
+		// memset(msg, 0, sizeof(msg));
+		// tmp = sprintf(msg, "%d.%d.%d.%d", updClient.remoteIP()[0], updClient.remoteIP()[1], updClient.remoteIP()[2], updClient.remoteIP()[3]);
+		updClient.write(host);
+		updClient.println();
 		updClient.println("User-Agent: Arduino/1.0");
 		updClient.println("Connection: close");
 		updClient.println("Content-Type: application/x-www-form-urlencoded;");
@@ -192,24 +235,33 @@ int sendUpdate(IPAddress ip) {
 		Serial.print(F("msg length - "));
 		Serial.println(tlength);
 
-		updClient.println(tlength + 16);
+		updClient.println(tlength + N_BLOCK);
 		updClient.println();
 		// updClient.println((char *)aesBuf);
 		updClient.write(buf, tlength);
 		updClient.write(iv, N_BLOCK);
 		// updClient.println();
-		delay(10);
+		delay(100);
+
+		Serial.println(F("server response"));
+		char c;
+		while (updClient.available()) {
+			c = updClient.read();
+			Serial.print(c);
+		}
+		Serial.printf(F("end server response\n"));
 	} else {
 		if (fail_count > 2)
 			return -2;
 
-		Serial.println(F("could not connect to update server"));
-		Serial.println(fail_count);
+		Serial.printf(F("could not connect to update server\n"));
+		Serial.printf("%d\n", fail_count);
 		fail_count++;
 	}
 	tmp = 0;
+	updClient.flush();
 	updClient.stop();
-	// updClient.
+	// Ethernet.my_socketClose(updClient.getSocketNumber());
 	// webserver.begin();
 	
 	// memcpy(iv, key, N_BLOCK);
@@ -230,14 +282,14 @@ void procSwitchReq(void)
 	tmp = -1;
 	EthernetClient client = swServer.available();
 	// String req;
-	memset(buf, 0, sizeof(buf));
 	// Serial.println(F("process request loop"));
 	if (client) {
-		Serial.println(F("client"));
+		memset(buf, 0, sizeof(buf));
+		Serial.printf(F("client\n"));
 		while (client.connected()) {
-			Serial.println(F("connected"));
+			Serial.printf(F("connected\n"));
 			if (client.available()) {
-				Serial.println(F("incoming request"));
+				Serial.printf(F("incoming request\n"));
 				// Serial.write()
 				delay(5);
 				// client.readBytes(buf, sizeof(buf));
@@ -253,7 +305,7 @@ void procSwitchReq(void)
 
 
 				sprintf(buf, "outlet - %d\nstate - %d", outlet, state);
-				Serial.println(buf);
+				Serial.printf("%s\n", buf);
 
 				if ((outlet > -1 && outlet < 4) && (state == 0 || state == 1)) {
 					tmp = 0;
@@ -305,7 +357,7 @@ void procSwitchReq(void)
 
 // void(* resetFunc)(void) = 0;
 void resetFunc() {
-	Serial.println(F("reset..."));
+	Serial.printf(F("reset...\n"));
 	wdt_enable(WDTO_15MS);
 	while(1);
 }
@@ -331,13 +383,13 @@ void setup()
 	//-------------------------------------------------------------------------------------------------------
 	// Init webserver
 	//-------------------------------------------------------------------------------------------------------
-	Serial.println(F("Initializing with DHCP..."));
+	Serial.printf(F("Initializing with DHCP...\n"));
 	if (Ethernet.begin(mac) == 0) {
-		Serial.println(F("Failed to configure with DHCP, using defined parameters."));
+		Serial.printf(F("Failed to configure with DHCP, using defined parameters.\n"));
 		// Ethernet.begin(mac, ipAddr, dns, gateway);
 
 		if (Ethernet.hardwareStatus() == EthernetNoHardware)
-			Serial.println(F("Hardware issue."));
+			Serial.printf(F("Hardware issue.\n"));
 
 		delay(5000);
 		goto begin;
@@ -355,12 +407,21 @@ void setup()
 	//-------------------------------------------------------------------------------------------------------
 	//-------------------------------------------------------------------------------------------------------
 	// gdbstub_init();
-	Serial.print(F("Server is at "));
+	Serial.printf(F("Server is at "));
 	Serial.println(Ethernet.localIP());
-
+	if (Ethernet.localIP()[0] == 192) {
+		Serial.println(F("Debug mode."));
+		is_debug = true;
+	} else {
+		Serial.println(F("Deployment mode"));
+		is_debug = false;
+	}
 	updateDelay.start(5000);
 	Serial.println(updateDelay.remaining());
 	swServer.begin();
+	updClient.setConnectionTimeout(2000);
+	updClient.setTimeout(2000);
+	randomSeed(updateDelay.remaining());
 }
 
 void loop()
@@ -375,7 +436,8 @@ void loop()
 			resetFunc();
 		}
 		
-		updateDelay.start(15000);
+		updateDelay.start(10000);
+		swServer.flush();
 		swServer.begin();
 		// tmp = 0;
 	}
