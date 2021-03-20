@@ -9,6 +9,7 @@
 #include "AES.h"
 #include "avr/wdt.h"
 #include "base64.hpp"
+#include "utility/w5100.h"
 // #include "sercerts.h"
 
 char aesKey_in_new[] = "abcdefghijklmnop";
@@ -47,6 +48,35 @@ byte *conTarget;
 int srvPort = 80;
 
 AES aes128;
+
+
+int freeRam() {
+  extern int __heap_start,*__brkval;
+  int v;
+  return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int) __brkval); 
+}
+
+void ShowSockStatus() {
+  for (int i = 0; i < MAX_SOCK_NUM; i++) {
+    Serial.print(F("Socket#"));
+    Serial.print(i);
+    uint8_t s = W5100.readSnSR(i);
+    Serial.print(F(":0x"));
+    Serial.print(s,16);
+    Serial.print(F(" "));
+    Serial.print(W5100.readSnPORT(i));
+    Serial.print(F(" D:"));
+    uint8_t dip[4];
+    W5100.readSnDIPR(i, dip);
+    for (int j=0; j<4; j++) {
+      Serial.print(dip[j],10);
+      if (j<3) Serial.print(".");
+    }
+    Serial.print(F("("));
+    Serial.print(W5100.readSnDPORT(i));
+    Serial.println(F(")"));
+  }
+}
 
 int printArr(void *arr, int length) {
 	if (arr == NULL) {
@@ -272,6 +302,7 @@ int sendUpdate(IPAddress ip) {
 	// Serial.write(msg, tlength);
 	// Serial.println();
 	// free(msg);
+	ShowSockStatus();
 	return 0;
 }
 
@@ -427,6 +458,8 @@ void setup()
 void loop()
 {
 	if (updateDelay.justFinished()) {
+		Serial.print(F("ram available: "));
+		Serial.println(freeRam());
 		swServer.flush();
 		Serial.println(F("Delay"));
 		tmp = sendUpdate(Ethernet.localIP());
@@ -438,7 +471,7 @@ void loop()
 		
 		updateDelay.start(10000);
 		swServer.flush();
-		swServer.begin();
+		// swServer.begin();
 		// tmp = 0;
 	}
 	// }
