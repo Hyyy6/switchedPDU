@@ -472,7 +472,8 @@ void loop()
 			resetFunc();
 		}
 		
-		updateDelay.start(60000);
+		updateDelay.start(600000);
+		Serial.println(updateDelay.remaining());
 		swServer.flush();
 	}
 	/* process incoming connections */
