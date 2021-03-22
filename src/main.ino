@@ -2,8 +2,6 @@
 
 #include <Arduino.h>
 #include "Ethernet.h"
-// #include "WebServer.h"
-// #include "ArduinoJson.h"
 #include "millisDelay.h"
 #include <SPI.h>
 #include "AES.h"
@@ -11,12 +9,9 @@
 #include "base64.hpp"
 #include "utility/w5100.h"
 #include "secrets.h"
-// #include "ArduinoJson.h"
-// #include "sercerts.h"
 
 byte aesKey_in_new[N_BLOCK];// = "abcdefghijklmnop";
 byte aesKey_in_old[N_BLOCK];// = "abcdefghijklmnop";
-// char *aesKey_out;// = "abcdefghijklmnop";
 bool is_debug = true;
 
 //-------------------------------------------------------------------------------------------------------
@@ -125,8 +120,6 @@ int getRandomBlock(byte *block) {
 
 int encrypt(byte *msg, int tlength) {
 	int n_blocks;
-	// const uint8_t *key = "abcdefghijklmnop";
-	// memcpy(iv, key, N_BLOCK);
 	Serial.println("ivInit");
 	getRandomBlock(ivInit);
 	memcpy(iv, ivInit, N_BLOCK);
@@ -142,9 +135,7 @@ int encrypt(byte *msg, int tlength) {
 	aes128.cbc_encrypt(msg, (byte *)buf, n_blocks, iv);
 	aes128.clean();
 	memcpy(iv, ivInit, N_BLOCK);
-	// printArr((void *)buf, tlength);
 	Serial.write((uint8_t *)buf, tlength);
-	// Serial.println();
 	return 0;
 }
 
@@ -155,7 +146,6 @@ int decrypt(byte *cipher, byte *plain, byte *key, byte* IV, int tlength) {
 	if (!cipher || !plain || !key || !IV || tlength <= N_BLOCK) {
 		return -1;
 	}
-	// memset(msg, 0, sizeof(msg));
 	aes128.clean();
 
 	aes128.set_key(key, N_BLOCK);
@@ -168,33 +158,22 @@ int decrypt(byte *cipher, byte *plain, byte *key, byte* IV, int tlength) {
 
 int setMsg(byte *msg, int len, IPAddress ip) {
 	int ilength = 0, plength = 0, tlength = 0;
+	int b64_len = 0;
 	memset(buf, 0, sizeof(buf));
 	memcpy(aesKey_in_old, aesKey_in_new, N_BLOCK);
 	Serial.println("aesKey_in_new generate:");
 	getRandomBlock(aesKey_in_new);
-	// sprintf(buf, "{\"password\": \"secpass123\",\"name\": \"ard\",\"payload\": {\"deviceName\": \"arduino\",\"ipAddress\": \"%d.%d.%d.%d\",\"key\": \"%s\"}}", ip[0], ip[1], ip[2], ip[3], iv);
-	// memset(buf, 0, sizeof(buf));
 	tmp = sprintf(buf, "{\"password\": \"%s\",\"ipAddress\": \"%d.%d.%d.%d\",\"key\": \"", password, ip[0], ip[1], ip[2], ip[3]);
 	memset(msg, 0, len);
+	b64_len = encode_base64((char*)aesKey_in_new, 16, msg);
 	printArr(msg, 24);
-	ilength = encode_base64((char*)aesKey_in_new, 16, msg);
-	printArr(msg, 24);
-	Serial.print("length of base64 encoded key: ");
-	Serial.println(ilength);
+	Serial.print(F("length of base64 encoded key: "));
+	Serial.println(b64_len);
 	Serial.println((char*)msg);
 
-	// printArr(iv, 16);
-	// printArr(msg, ilength);
-	// plength = decode_base64(msg, ilength, iv);
-	// printArr(iv, 16);
-
-	// Serial.println(tmp);
-	memcpy(&buf[tmp], msg, ilength);
-	// ilength = decode_base64((char*)msg, ilength, aesKey_in_new);
-	// Serial.print("length of base64 decoded key: ");
-	// Serial.println(ilength);
+	memcpy(&buf[tmp], msg, b64_len);
 	Serial.println((char*)aesKey_in_new);
-	tmp = tmp + ilength;
+	tmp = tmp + b64_len;
 	memcpy(&buf[tmp], "\"}", 2);
 	tmp = sizeof(buf) - 1;
 	while(tmp && !buf[tmp]) {
@@ -202,24 +181,16 @@ int setMsg(byte *msg, int len, IPAddress ip) {
 	}
 	tmp += 1; //size of msg;
 	ilength = tmp;
-	// int end = tmp;
 	Serial.print(F("size of message - "));
 	Serial.println(ilength);
 	if (((ilength) % 16) == 0) {
 		Serial.print(F("message fits int number of blocks of 16 - "));
 		Serial.println(ilength);
-		// msg = (byte*)malloc(ilength);
 	} else {
 		Serial.print(F("message will be padded to int number of blocks of 16 - "));
 		plength = ((ilength/16) + 1)*16 - ilength;
-		// Serial.println();
-		// msg = (byte*)malloc(ilength + plength);
 	}
 	tlength = ilength + plength;
-	// if (!msg) {
-	// 	Serial.println(F("Not enough memory.\n"));
-	// 	return -1;
-	// }
 	Serial.println(tlength);
 	memset(msg, 0, tlength);
 	memcpy(msg, buf, tlength);
@@ -231,35 +202,25 @@ int setMsg(byte *msg, int len, IPAddress ip) {
 		Serial.print(end);
 		msg[end] = plength;
 	}
-	// Serial.printf("n-2 = %x; n-1 = %x\n", buf[sizeof(buf) - 2], buf[sizeof(buf) - 1]);
 	Serial.write(msg, tlength);
 	Serial.println();
-	// free(*msg);
 	return tlength;
 }
 
 int sendUpdate(IPAddress ip) {
-	// webserver.reset();
-	// IPAddress *localip;
 	Serial.println(F("Start sendUpdate"));
-	// byte **msgPtr;
-	// byte *msg;
 	int tlength = setMsg((byte *)msg, sizeof(msg), ip);
 	if (tlength <= 0) {
 		Serial.println(F("Error compositing update message."));
 		return -1;
 	}
 	Serial.write(msg, tlength);
-	// Serial.println("\nafter set before enc");
 	encrypt((byte *)msg, tlength);
 	
 	updClient.flush();
 	delay(100);
-	// Serial.println(F("connect..."));
 	tmp = 0;
 	while (tmp < 10) {
-		// if (!updClient.connect(updSrvAddr, srvPort)) {
-		// if (!updClient.connect(conn_string, srvPort)) {
 		if (is_debug) {
 			conTarget = updSrvAddr;
 		} else {
@@ -277,10 +238,7 @@ int sendUpdate(IPAddress ip) {
 	}
 	if (updClient.connected()) {
 		memset(msg, 0, sizeof(msg));
-		// tmp = sprintf(msg, "%d.%d.%d.%d", updClient.remoteIP()[0], updClient.remoteIP()[1], updClient.remoteIP()[2], updClient.remoteIP()[3]);
-		// Serial.println(msg);
 		delay(100);
-		// if (updClient.connected())
 		Serial.println(F("connected"));
 
 		updClient.flush();
@@ -292,9 +250,6 @@ int sendUpdate(IPAddress ip) {
 
 		updClient.println("PUT /api/spduAPI HTTP/1.1");
 		updClient.print("Host: ");
-		// updClient.println("192.168.0.114:7071");
-		// memset(msg, 0, sizeof(msg));
-		// tmp = sprintf(msg, "%d.%d.%d.%d", updClient.remoteIP()[0], updClient.remoteIP()[1], updClient.remoteIP()[2], updClient.remoteIP()[3]);
 		updClient.write(host);
 		updClient.println();
 		updClient.println("User-Agent: Arduino/1.0");
@@ -307,10 +262,8 @@ int sendUpdate(IPAddress ip) {
 
 		updClient.println(tlength + N_BLOCK);
 		updClient.println();
-		// updClient.println((char *)aesBuf);
 		updClient.write(buf, tlength);
 		updClient.write(iv, N_BLOCK);
-		// updClient.println();
 		delay(100);
 
 		Serial.println(F("server response"));
@@ -331,17 +284,6 @@ int sendUpdate(IPAddress ip) {
 	tmp = 0;
 	updClient.flush();
 	updClient.stop();
-	// Ethernet.my_socketClose(updClient.getSocketNumber());
-	// webserver.begin();
-	
-	// memcpy(iv, key, N_BLOCK);
-	// aes128.clean();
-	// aes128.set_key((byte *)key, 16);
-	// Serial.println(F("...decrypt..."));
-	// aes128.cbc_decrypt((byte*)buf,  msg, 16, iv);
-	// Serial.write(msg, tlength);
-	// Serial.println();
-	// free(msg);
 	ShowSockStatus();
 	return 0;
 }
@@ -357,8 +299,6 @@ void procSwitchReq(void)
 	char *ptr;
 	int content_length = 0;
 	EthernetClient client = swServer.available();
-	// String req;
-	// Serial.println(F("process request loop"));
 	if (client) {
 		memset(buf, 0, sizeof(buf));
 		Serial.printf(F("client\n"));
@@ -397,7 +337,7 @@ void procSwitchReq(void)
 				ptr = strstr(msg, name_parse);
 				if (ptr) {
 					Serial.println(&(ptr[sizeof(name_parse) - 1]));
-					outlet = atoi(&(ptr[sizeof(name_parse) - 1])); // name_parse is +2
+					outlet = atoi(&(ptr[sizeof(name_parse) - 1])); //name_parse len is +1 because of null-terminator
 
 				} else {
 					Serial.println(F("invalid outlet number"));
@@ -409,7 +349,7 @@ void procSwitchReq(void)
 				ptr = strstr(msg, state_parse);
 				if (ptr) {
 					Serial.println(&(ptr[sizeof(state_parse) - 1]));
-					state = atoi(&(ptr[sizeof(state_parse) - 1])); //state_parse is also + 2 because of escaping quotes
+					state = atoi(&(ptr[sizeof(state_parse) - 1])); //state_parse is also +1
 				} else {
 					Serial.println(F("invalid state"));
 					Serial.println(ptr - msg);
@@ -465,18 +405,6 @@ out:
 	return;
 }
 
-// void printArr(uint8_t *arr) {
-// 	int i;
-// 	int size = sizeof(arr);
-// 	// Serial.print("size of array: ");
-// 	Serial.println(size);
-// 	for (i = 0; i < size; i++) {
-// 		Serial.print(arr[i]);
-// 	}
-// 	Serial.print(F("\n"));
-// }
-
-// void(* resetFunc)(void) = 0;
 void resetFunc() {
 	Serial.printf(F("reset...\n"));
 	wdt_enable(WDTO_15MS);
@@ -485,22 +413,13 @@ void resetFunc() {
 
 void setup()
 {
-	// digitalWrite(4, HIGH);
-	// delay(200);
-	// pinMode(4, OUTPUT);
 	MCUSR = 0;
-	//enable serial data print
 	tmp = 0;
 	Serial.begin(9600);
 	while (!Serial); // wait for serial port
 	begin:
 	fail_count = 0;
 
-	// if (!SD.begin(4)) {
-	// 	Serial.println("Failed to initialize SD card.");
-	// 	return;
-	// }
-	// debug_init();
 	//-------------------------------------------------------------------------------------------------------
 	// Init webserver
 	//-------------------------------------------------------------------------------------------------------
@@ -561,10 +480,7 @@ void loop()
 		
 		updateDelay.start(60000);
 		swServer.flush();
-		// swServer.begin();
-		// tmp = 0;
 	}
-	// }
 	/* process incoming connections */
 	procSwitchReq();
 }
