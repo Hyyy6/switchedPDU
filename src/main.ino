@@ -10,10 +10,11 @@
 #include "avr/wdt.h"
 #include "base64.hpp"
 #include "utility/w5100.h"
+// #include "ArduinoJson.h"
 // #include "sercerts.h"
 
-char aesKey_in_new[] = "abcdefghijklmnop";
-char aesKey_in_old[] = "abcdefghijklmnop";
+byte aesKey_in_new[N_BLOCK];// = "abcdefghijklmnop";
+byte aesKey_in_old[N_BLOCK];// = "abcdefghijklmnop";
 static const char aesKey_out[] = "abcdefghijklmnop";
 bool is_debug = true;
 
@@ -28,7 +29,7 @@ char inputChar;
 char buf[128];
 char msg[128];
 byte iv[N_BLOCK], ivInit[N_BLOCK];
-int *intBlock = (int *)iv;
+// int *intBlock = (int *)iv;
 // byte aesBuf[256];
 int relayPins[] = {6, 7, 8, 9};
 int outletStates[] = {1, 1, 1, 1};
@@ -83,12 +84,13 @@ int printArr(void *arr, int length) {
 		return -1;
 	}
 	int i = 0;
-	char *ptr = (char *)arr;
+	byte *ptr = (char *)arr;
 
 	Serial.print(F("arr with sz - "));
 	Serial.println(length);
 	for (i = 0; i < length; i++) {
 		Serial.print(ptr[i]);
+		Serial.print(' ');
 	}
 	Serial.println();
 
@@ -97,26 +99,34 @@ int printArr(void *arr, int length) {
 int getRandomBlock(byte *block) {
 	if (!block)
 		return -1;
+	
+	
 	delay(1);
-	memset(iv, 0, 16); //setting 17 bytes overwrites msg
+	memset(block, 0, 16); //setting 17 bytes overwrites msg
 	for (int i = 0; i < 4; i++) {
-		intBlock[i] = random(RAND_MAX);
+		tmp = random(RAND_MAX);
+		for (int j = 0; j < 4; j++) {
+			block[i*4 + j] = ((byte*)&tmp)[j];
+		}
 	}
 	Serial.print("random block of 16: ");
 	for (int i = 0; i < 16; i++) {
-		Serial.print((char)iv[i]);
-		if (iv[i] == 0)
-			iv[i] = 1;
-		if (iv[i] == '\\')
-			iv[i] = 1;
+		Serial.print(block[i]);
+		Serial.print(' ');
+		if (block[i] == 0)
+			block[i] = 1;
+		if (block[i] == '\\')
+			block[i] = 1;
 	}
 	Serial.println();
 	return 0;
 }
 
 int encrypt(byte *msg, int tlength) {
+	int n_blocks;
 	// const uint8_t *key = "abcdefghijklmnop";
 	// memcpy(iv, key, N_BLOCK);
+	Serial.println("ivInit");
 	getRandomBlock(ivInit);
 	memcpy(iv, ivInit, N_BLOCK);
 	aes128.clean();
@@ -125,7 +135,7 @@ int encrypt(byte *msg, int tlength) {
 	Serial.print(F("message with length - "));
 	Serial.println(tlength);
 	Serial.write((char *)msg, tlength);
-	int n_blocks = tlength / 16;
+	n_blocks = tlength / 16;
 	Serial.print(F("message with nlocks - "));
 	Serial.println(n_blocks);
 	aes128.cbc_encrypt(msg, (byte *)buf, n_blocks, iv);
@@ -137,23 +147,52 @@ int encrypt(byte *msg, int tlength) {
 	return 0;
 }
 
-int setMsg(byte *msg, IPAddress ip) {
+int decrypt(byte *cipher, byte *plain, byte *key, byte* IV, int tlength) {
+	Serial.println(F("Decrypt..."));
+	int n_blocks;
+
+	if (!cipher || !plain || !key || !IV || tlength <= N_BLOCK) {
+		return -1;
+	}
+	// memset(msg, 0, sizeof(msg));
+	aes128.clean();
+
+	aes128.set_key(key, N_BLOCK);
+	n_blocks = tlength / N_BLOCK;
+
+	aes128.cbc_decrypt(cipher, plain, n_blocks, IV);
+
+	return 0;
+}
+
+int setMsg(byte *msg, int len, IPAddress ip) {
 	int ilength = 0, plength = 0, tlength = 0;
 	memset(buf, 0, sizeof(buf));
-	getRandomBlock(iv);
+	memcpy(aesKey_in_old, aesKey_in_new, N_BLOCK);
+	Serial.println("aesKey_in_new generate:");
+	getRandomBlock(aesKey_in_new);
 	// sprintf(buf, "{\"password\": \"secpass123\",\"name\": \"ard\",\"payload\": {\"deviceName\": \"arduino\",\"ipAddress\": \"%d.%d.%d.%d\",\"key\": \"%s\"}}", ip[0], ip[1], ip[2], ip[3], iv);
 	// memset(buf, 0, sizeof(buf));
 	tmp = sprintf(buf, "{\"password\": \"secpass123\",\"ipAddress\": \"%d.%d.%d.%d\",\"key\": \"", ip[0], ip[1], ip[2], ip[3]);
-	ilength = encode_base64(iv, 16, msg);
+	memset(msg, 0, len);
+	printArr(msg, 24);
+	ilength = encode_base64((char*)aesKey_in_new, 16, msg);
+	printArr(msg, 24);
+	Serial.print("length of base64 encoded key: ");
+	Serial.println(ilength);
+	Serial.println((char*)msg);
 
 	// printArr(iv, 16);
 	// printArr(msg, ilength);
 	// plength = decode_base64(msg, ilength, iv);
 	// printArr(iv, 16);
 
-
-	Serial.println(tmp);
+	// Serial.println(tmp);
 	memcpy(&buf[tmp], msg, ilength);
+	// ilength = decode_base64((char*)msg, ilength, aesKey_in_new);
+	// Serial.print("length of base64 decoded key: ");
+	// Serial.println(ilength);
+	Serial.println((char*)aesKey_in_new);
 	tmp = tmp + ilength;
 	memcpy(&buf[tmp], "\"}", 2);
 	tmp = sizeof(buf) - 1;
@@ -204,7 +243,7 @@ int sendUpdate(IPAddress ip) {
 	Serial.println(F("Start sendUpdate"));
 	// byte **msgPtr;
 	// byte *msg;
-	int tlength = setMsg((byte *)msg, ip);
+	int tlength = setMsg((byte *)msg, sizeof(msg), ip);
 	if (tlength <= 0) {
 		Serial.println(F("Error compositing update message."));
 		return -1;
@@ -306,11 +345,16 @@ int sendUpdate(IPAddress ip) {
 	return 0;
 }
 
+static const char name_parse[] = "\"name\": ";
+static const char state_parse[] = "\"state\": ";
+
 void procSwitchReq(void) 
 {
 	int outlet = -1;
 	int state = -1;
 	tmp = -1;
+	char *ptr;
+	int content_length = 0;
 	EthernetClient client = swServer.available();
 	// String req;
 	// Serial.println(F("process request loop"));
@@ -325,16 +369,59 @@ void procSwitchReq(void)
 				delay(5);
 				// client.readBytes(buf, sizeof(buf));
 				client.find("Content-Length:");
+				content_length = client.parseInt();
+
 				client.find("\r\n\r\n");
-				// client.find("\"");
-				// client.readBytesUntil(0, buf, sizeof(buf));
-				// Serial.println(buf);
-				client.find("\"name\":");
-				outlet = client.parseInt();
-				client.find("\"state\":");
-				state = client.parseInt();
+				
+				tmp = client.readBytesUntil(0, buf, sizeof(buf));
+				Serial.print(F("size of incoming msg without header: "));
+				Serial.println(tmp);
+				if (tmp != content_length) {
+					Serial.println(F("Invalid request."));
+					return;
+				}
+				content_length = content_length - 16;
+				memcpy(iv, &buf[content_length], 16);
+				printArr(iv, N_BLOCK);
+				memset(msg, 0, sizeof(msg));
 
+				memcpy(ivInit, iv, N_BLOCK);
+				decrypt((byte*)buf, (byte*)msg, aesKey_in_new, iv, content_length);
+				Serial.println(msg);
+				if (!strstr(msg, "name") || !strstr(msg, "state")) {
+					memset(msg, 0, sizeof(msg));
+					memcpy(iv, ivInit, N_BLOCK);
+					decrypt((byte*)buf, (byte*)msg, aesKey_in_old, iv, content_length);
+				}
+				ptr = strstr(msg, name_parse);
+				if (ptr) {
+					Serial.println(&(ptr[sizeof(name_parse) - 1]));
+					outlet = atoi(&(ptr[sizeof(name_parse) - 1])); // name_parse is +2
 
+				} else {
+					Serial.println(F("invalid outlet number"));
+					Serial.println(ptr - msg);
+					Serial.println(ptr);
+					goto out;
+				}
+
+				ptr = strstr(msg, state_parse);
+				if (ptr) {
+					Serial.println(&(ptr[sizeof(state_parse) - 1]));
+					state = atoi(&(ptr[sizeof(state_parse) - 1])); //state_parse is also + 2 because of escaping quotes
+				} else {
+					Serial.println(F("invalid state"));
+					Serial.println(ptr - msg);
+					Serial.println(ptr);
+					goto out;
+				}
+
+				// client.find("\"name\":");
+				// outlet = client.parseInt();
+				// client.find("\"state\":");
+				// state = client.parseInt();
+
+				memset(buf, 0, sizeof(buf));
 				sprintf(buf, "outlet - %d\nstate - %d", outlet, state);
 				Serial.printf("%s\n", buf);
 
@@ -364,9 +451,11 @@ void procSwitchReq(void)
 
 				delay(5);
 				client.stop();
+				updateDelay.finish();
 			}
 		}
 	}
+out:
 	delay(1);
 	client.stop();
 	delay(1);
@@ -469,7 +558,7 @@ void loop()
 			resetFunc();
 		}
 		
-		updateDelay.start(10000);
+		updateDelay.start(60000);
 		swServer.flush();
 		// swServer.begin();
 		// tmp = 0;
