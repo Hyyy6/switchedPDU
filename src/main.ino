@@ -10,12 +10,13 @@
 #include "avr/wdt.h"
 #include "base64.hpp"
 #include "utility/w5100.h"
+#include "secrets.h"
 // #include "ArduinoJson.h"
 // #include "sercerts.h"
 
 byte aesKey_in_new[N_BLOCK];// = "abcdefghijklmnop";
 byte aesKey_in_old[N_BLOCK];// = "abcdefghijklmnop";
-static const char aesKey_out[] = "abcdefghijklmnop";
+// char *aesKey_out;// = "abcdefghijklmnop";
 bool is_debug = true;
 
 //-------------------------------------------------------------------------------------------------------
@@ -84,7 +85,7 @@ int printArr(void *arr, int length) {
 		return -1;
 	}
 	int i = 0;
-	byte *ptr = (char *)arr;
+	byte *ptr = arr;
 
 	Serial.print(F("arr with sz - "));
 	Serial.println(length);
@@ -173,7 +174,7 @@ int setMsg(byte *msg, int len, IPAddress ip) {
 	getRandomBlock(aesKey_in_new);
 	// sprintf(buf, "{\"password\": \"secpass123\",\"name\": \"ard\",\"payload\": {\"deviceName\": \"arduino\",\"ipAddress\": \"%d.%d.%d.%d\",\"key\": \"%s\"}}", ip[0], ip[1], ip[2], ip[3], iv);
 	// memset(buf, 0, sizeof(buf));
-	tmp = sprintf(buf, "{\"password\": \"secpass123\",\"ipAddress\": \"%d.%d.%d.%d\",\"key\": \"", ip[0], ip[1], ip[2], ip[3]);
+	tmp = sprintf(buf, "{\"password\": \"%s\",\"ipAddress\": \"%d.%d.%d.%d\",\"key\": \"", password, ip[0], ip[1], ip[2], ip[3]);
 	memset(msg, 0, len);
 	printArr(msg, 24);
 	ilength = encode_base64((char*)aesKey_in_new, 16, msg);

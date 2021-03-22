@@ -5,4 +5,4 @@
 .vscode/ipch
 lib/webduino/examples
 platformio.ini
-src/sercerts.h
+src/secrets.h
