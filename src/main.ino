@@ -17,7 +17,6 @@ bool is_debug = true;
 //-------------------------------------------------------------------------------------------------------
 // Init outlet relay pins and state
 //-------------------------------------------------------------------------------------------------------
-// String readString;
 int fail_count = 0;
 millisDelay updateDelay;
 int tmp = 0;
@@ -25,12 +24,9 @@ char inputChar;
 char buf[128];
 char msg[128];
 byte iv[N_BLOCK], ivInit[N_BLOCK];
-// int *intBlock = (int *)iv;
-// byte aesBuf[256];
 int relayPins[] = {6, 7, 8, 9};
 int outletStates[] = {1, 1, 1, 1};
 static uint8_t mac[] = {0xF9, 0x62, 0x30, 0x4C, 0x7D, 0xC5};
-// IPAddress ipAddr(10, 0, 1, 12);
 IPAddress gateway(192, 168, 1, 1);
 IPAddress dns(8, 8, 8, 8);
 
@@ -41,7 +37,6 @@ static const char conn_string[] = "hosts.spduapi.azurewebsites.net";
 static const char host[] = "spduapi.azurewebsites.net";
 byte *conTarget;
 
-// int srvPort = 8071;
 int srvPort = 80;
 
 AES aes128;
@@ -118,24 +113,27 @@ int getRandomBlock(byte *block) {
 	return 0;
 }
 
-int encrypt(byte *msg, int tlength) {
+int encrypt(byte *plain, byte *cipher, byte *key, byte *IV, int tlength) {
+	Serial.println(F("Encrypt..."));
 	int n_blocks;
-	Serial.println("ivInit");
-	getRandomBlock(ivInit);
-	memcpy(iv, ivInit, N_BLOCK);
+	if (!cipher || !plain || !key || !IV || tlength <= N_BLOCK) {
+		return -1;
+	}
+	// Serial.println("ivInit");
+	// getRandomBlock(ivInit);
+	// memcpy(iv, ivInit, N_BLOCK);
 	aes128.clean();
-	aes128.set_key((byte *)aesKey_out, 16);
-	Serial.println(F("...encrypt..."));
+	aes128.set_key(key, 16);
 	Serial.print(F("message with length - "));
 	Serial.println(tlength);
-	Serial.write((char *)msg, tlength);
+	Serial.write((char *)plain, tlength);
 	n_blocks = tlength / 16;
 	Serial.print(F("message with nlocks - "));
 	Serial.println(n_blocks);
-	aes128.cbc_encrypt(msg, (byte *)buf, n_blocks, iv);
+	aes128.cbc_encrypt(plain, cipher, n_blocks, iv);
 	aes128.clean();
-	memcpy(iv, ivInit, N_BLOCK);
-	Serial.write((uint8_t *)buf, tlength);
+	// memcpy(iv, ivInit, N_BLOCK);
+	Serial.write((uint8_t *)cipher, tlength);
 	return 0;
 }
 
@@ -152,7 +150,7 @@ int decrypt(byte *cipher, byte *plain, byte *key, byte* IV, int tlength) {
 	n_blocks = tlength / N_BLOCK;
 
 	aes128.cbc_decrypt(cipher, plain, n_blocks, IV);
-
+	aes128.clean();
 	return 0;
 }
 
@@ -215,8 +213,11 @@ int sendUpdate(IPAddress ip) {
 		return -1;
 	}
 	Serial.write(msg, tlength);
-	encrypt((byte *)msg, tlength);
-	
+
+	getRandomBlock(ivInit);
+	memcpy(iv, ivInit, N_BLOCK);
+	encrypt((byte *)msg, (byte*)buf, (byte*)aesKey_out, iv, tlength);
+	// memcpy(iv, i)
 	updClient.flush();
 	delay(100);
 	tmp = 0;
@@ -263,7 +264,7 @@ int sendUpdate(IPAddress ip) {
 		updClient.println(tlength + N_BLOCK);
 		updClient.println();
 		updClient.write(buf, tlength);
-		updClient.write(iv, N_BLOCK);
+		updClient.write(ivInit, N_BLOCK);
 		delay(100);
 
 		Serial.println(F("server response"));
@@ -357,11 +358,6 @@ void procSwitchReq(void)
 					goto out;
 				}
 
-				// client.find("\"name\":");
-				// outlet = client.parseInt();
-				// client.find("\"state\":");
-				// state = client.parseInt();
-
 				memset(buf, 0, sizeof(buf));
 				sprintf(buf, "outlet - %d\nstate - %d", outlet, state);
 				Serial.printf("%s\n", buf);
@@ -387,8 +383,6 @@ void procSwitchReq(void)
 				}
 				client.write(buf);
 				client.println();
-				// snprintf(buf, sizeof(buf), "Changed outlet #%d to \"%s\"", outlet, state ? "On" : "Off");
-				Serial.println(buf);
 
 				delay(5);
 				client.stop();
