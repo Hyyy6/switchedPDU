@@ -9,11 +9,15 @@
 #include "base64.hpp"
 #include "utility/w5100.h"
 #include "secrets.h"
+// #include "EEPROM.h"
 
 byte aesKey_in_new[N_BLOCK];// = "abcdefghijklmnop";
 byte aesKey_in_old[N_BLOCK];// = "abcdefghijklmnop";
 bool is_debug = true;
 
+#define START_MEM_ADDR 0
+#define OUTLET_COUNT 4
+#define EXPAND_OUTLET_ARRAY(array)	array[0], array[1], array[2], array[3]
 //-------------------------------------------------------------------------------------------------------
 // Init outlet relay pins and state
 //-------------------------------------------------------------------------------------------------------
@@ -21,27 +25,70 @@ int fail_count = 0;
 millisDelay updateDelay;
 int tmp = 0;
 char inputChar;
-char buf[128];
-char msg[128];
+char buf[150];
+char msg[150];
 byte iv[N_BLOCK], ivInit[N_BLOCK];
 int relayPins[] = {6, 7, 8, 9};
 int outletStates[] = {1, 1, 1, 1};
-static uint8_t mac[] = {0xF9, 0x62, 0x30, 0x4C, 0x7D, 0xC5};
+static uint8_t mac[] = {0xF8, 0x62, 0x30, 0x4C, 0x7D, 0xC5};
 IPAddress gateway(192, 168, 1, 1);
 IPAddress dns(8, 8, 8, 8);
 
 EthernetClient updClient;
 EthernetServer swServer(1234);
-byte updSrvAddr[] = {192, 168, 0, 113};
+// byte updSrvAddr[] = {192, 168, 0, 113};
+IPAddress updSrvAddr(192, 168, 0, 113);
 static const char conn_string[] = "hosts.spduapi.azurewebsites.net";
+// static const char conn_string[] = "localhost";
 static const char host[] = "spduapi.azurewebsites.net";
-byte *conTarget;
+// static const char host[] = "localhost:7071";
+const char *conTarget;
 
 int srvPort = 80;
+// int srvPort = 7071;
 
 AES aes128;
 
 
+int setOutletState(uint8_t outlet, uint8_t state) {
+	byte *ptr = START_MEM_ADDR;
+	if (outlet > 3)
+		return -1;
+
+	switch (state) {
+		case 0:
+		case 1:
+			outletStates[outlet] = state;
+			eeprom_update_byte(ptr + outlet, state);
+			digitalWrite(relayPins[outlet], state);
+			break;
+		default:
+			return -1;
+	}
+	return 0;
+}
+
+int updateFromLocal() {
+	byte *addr;
+	byte value = 0;
+	for(int i = 0; i < OUTLET_COUNT; i++) {
+		addr = (byte *)START_MEM_ADDR + i;
+		value = eeprom_read_byte(addr);
+		// Serial.printf(F("value - "));
+		// Serial.println(value);
+		if (value > 1) {
+			value = 1;
+			eeprom_update_byte(addr, value);
+		}
+		
+		// Serial.printf(F("set outlet "));Serial.print(i);Serial.printf(F("to value "));Serial.println(value);
+		// outletStates[i] = value;
+		setOutletState(i, value);
+	}
+	
+	return 0;
+
+}
 int freeRam() {
   extern int __heap_start,*__brkval;
   int v;
@@ -170,22 +217,26 @@ int setMsg(byte *msg, int len, IPAddress ip) {
 	Serial.println((char*)msg);
 
 	memcpy(&buf[tmp], msg, b64_len);
+	// tmp += sprintf(&buf[tmp], "")
 	Serial.println((char*)aesKey_in_new);
 	tmp = tmp + b64_len;
-	memcpy(&buf[tmp], "\"}", 2);
+	tmp += sprintf(&buf[tmp], "\",\"state\": [%d, %d, %d, %d]}", EXPAND_OUTLET_ARRAY(outletStates));
+	// Serial.printf("[%d, %d, %d, %d]\n", outletStates[0], outletStates[1], outletStates[2], outletStates[3]);
+	// Serial.printf("[%d, %d, %d, %d]\n", EXPAND_OUTLET_ARRAY(outletStates));
+	// memcpy(&buf[tmp], "\"}", 2);
 	tmp = sizeof(buf) - 1;
 	while(tmp && !buf[tmp]) {
 		tmp--;
 	}
 	tmp += 1; //size of msg;
 	ilength = tmp;
-	Serial.print(F("size of message - "));
-	Serial.println(ilength);
+	// Serial.print(F("size of message - "));
+	// Serial.println(ilength);
 	if (((ilength) % 16) == 0) {
-		Serial.print(F("message fits int number of blocks of 16 - "));
-		Serial.println(ilength);
+		// Serial.print(F("message fits int number of blocks of 16 - "));
+		// Serial.println(ilength);
 	} else {
-		Serial.print(F("message will be padded to int number of blocks of 16 - "));
+		// Serial.print(F("message will be padded to int number of blocks of 16 - "));
 		plength = ((ilength/16) + 1)*16 - ilength;
 	}
 	tlength = ilength + plength;
@@ -193,9 +244,9 @@ int setMsg(byte *msg, int len, IPAddress ip) {
 	memset(msg, 0, tlength);
 	memcpy(msg, buf, tlength);
 	/*PKCS7 padding*/
-	Serial.print(F("PKCS7 padding - fill with "));
-	Serial.print(plength);
-	Serial.println();
+	// Serial.print(F("PKCS7 padding - fill with "));
+	// Serial.print(plength);
+	// Serial.println();
 	for (int end = ilength; end < tlength; end++) {
 		Serial.print(end);
 		msg[end] = plength;
@@ -223,19 +274,28 @@ int sendUpdate(IPAddress ip) {
 	tmp = 0;
 	while (tmp < 10) {
 		if (is_debug) {
-			conTarget = updSrvAddr;
+				// conTarget = (char *)(uint32_t)updSrvAddr;
+			if (!updClient.connect(updSrvAddr, srvPort)) {
+				delay(100);
+				tmp++;
+				Serial.print(F("retry "));
+				Serial.println(tmp);
+			} else {
+				break;
+			}
 		} else {
-			conTarget = (byte *)conn_string;
+			conTarget = (char *)conn_string;
+			if (!updClient.connect(conTarget, srvPort)) {
+				delay(100);
+				tmp++;
+				Serial.print(F("retry "));
+				Serial.println(tmp);
+			} else {
+				break;
+			}
 		}
-		conTarget = (byte *)conn_string;
-		if (!updClient.connect(conn_string, srvPort)) {
-			delay(100);
-			tmp++;
-			Serial.print(F("retry "));
-			Serial.println(tmp);
-		} else {
-			break;
-		}
+		// conTarget = (byte *)conn_string;
+		
 	}
 	if (updClient.connected()) {
 		memset(msg, 0, sizeof(msg));
@@ -364,8 +424,9 @@ void procSwitchReq(void)
 
 				if ((outlet > -1 && outlet < 4) && (state == 0 || state == 1)) {
 					tmp = 0;
-					outletStates[outlet] = state;
-					digitalWrite(relayPins[outlet], state);
+					setOutletState(outlet, state);
+					// outletStates[outlet] = state;
+					// digitalWrite(relayPins[outlet], state);
 				}
 
 				delay(5);
@@ -411,14 +472,15 @@ void setup()
 	tmp = 0;
 	Serial.begin(9600);
 	while (!Serial); // wait for serial port
-	begin:
+	updateFromLocal();
+begin:
 	fail_count = 0;
 
 	//-------------------------------------------------------------------------------------------------------
 	// Init webserver
 	//-------------------------------------------------------------------------------------------------------
 	Serial.printf(F("Initializing with DHCP...\n"));
-	if (Ethernet.begin(mac) == 0) {
+	if (Ethernet.begin(mac, 5000, 5000) == 0) {
 		Serial.printf(F("Failed to configure with DHCP, using defined parameters.\n"));
 		// Ethernet.begin(mac, ipAddr, dns, gateway);
 
@@ -443,7 +505,7 @@ void setup()
 	// gdbstub_init();
 	Serial.printf(F("Server is at "));
 	Serial.println(Ethernet.localIP());
-	if (Ethernet.localIP()[0] == 192) {
+	if (Ethernet.localIP()[0] == 200) {
 		Serial.println(F("Debug mode."));
 		is_debug = true;
 	} else {
