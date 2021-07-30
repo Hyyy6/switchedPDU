@@ -309,7 +309,7 @@ int sendUpdate(IPAddress ip) {
 		}
 		Serial.println(F("sending addr upd"));
 
-		updClient.println("PUT /api/spduAPI HTTP/1.1");
+		updClient.println("PUT /spduAPI HTTP/1.1");
 		updClient.print("Host: ");
 		updClient.write(host);
 		updClient.println();
