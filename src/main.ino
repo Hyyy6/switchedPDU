@@ -52,8 +52,8 @@ EthernetServer swServer(1234);
 static const char conn_string[] = "hosts.spduapi.azurewebsites.net";
 static const char host[] = "spduapi.azurewebsites.net";
 #else
-static const char conn_string[] = "192.168.137.140";
-static const char host[] = "192.168.137.140:6969";
+static const char conn_string[] = "10.10.0.156";
+static const char host[] = "10.10.0.156:6969";
 #endif
 const char *conTarget;
 
@@ -235,7 +235,7 @@ int setMsg(char *msg, int len, IPAddress ip) {
 	// Serial.println((char*)aesKey_in_new);
 	// tmp = tmp + b64_len;
 	// Serial.printf("+++ size - %d +++\n%s\n", tmp, msg);
-	tmp1 = sprintf(&msg[tmp], ",\"state\": [%d, %d, %d, %d]}", EXPAND_OUTLET_ARRAY(outletStates));
+	tmp1 = sprintf(&msg[tmp], ",\"state\": [%d, %d, %d, %d]} ", EXPAND_OUTLET_ARRAY(outletStates));
 	// Serial.printf("[%d, %d, %d, %d]\n", outletStates[0], outletStates[1], outletStates[2], outletStates[3]);
 	// Serial.printf("[%d, %d, %d, %d]\n", EXPAND_OUTLET_ARRAY(outletStates));
 	// memcpy(&buf[tmp], "\"}", 2);
@@ -341,9 +341,9 @@ int sendUpdate(IPAddress ip) {
 		// Ethernet.MACAddress(mac);
 		// printArr(mac, 6);
 		Serial.printf("+++ header length - %d +++\n%s\n", tmp, big_buf);
-		tmp1 = snprintf(&big_buf[tmp], sizeof(big_buf) - tmp, "%s\n", buf);
+		tmp1 = snprintf(&big_buf[tmp], sizeof(big_buf) - tmp, "%s\0", buf);
 		Serial.printf("+++ added bytes - %d\n===============\n%s +++\n%s\n", tmp1, buf, big_buf);
-		updClient.write(big_buf, tmp + tmp1);
+		updClient.write(big_buf);
 		// updClient.write(buf, tlength);
 		// updClient.write(ivInit, N_BLOCK);
 		updClient.flush();
