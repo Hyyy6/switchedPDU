@@ -38,13 +38,13 @@ EthernetClient updClient;
 EthernetServer swServer(1234);
 // byte updSrvAddr[] = {192, 168, 0, 113};
 IPAddress updSrvAddr(192, 168, 0, 113);
-static const char conn_string[] = "hosts.spduapi.azurewebsites.net";
+static const char conn_string[] = "10.10.0.156";
 // static const char conn_string[] = "localhost";
-static const char host[] = "spduapi.azurewebsites.net";
+static const char host[] = "10.10.0.156:6969";
 // static const char host[] = "localhost:7071";
 const char *conTarget;
 
-int srvPort = 80;
+int srvPort = 6969;
 // int srvPort = 7071;
 
 AES aes128;
@@ -298,7 +298,7 @@ int sendUpdate(IPAddress ip) {
 		
 	}
 	if (updClient.connected()) {
-		memset(msg, 0, sizeof(msg));
+		// memset(msg, 0, sizeof(msg));
 		delay(100);
 		Serial.println(F("connected"));
 
@@ -309,7 +309,7 @@ int sendUpdate(IPAddress ip) {
 		}
 		Serial.println(F("sending addr upd"));
 
-		updClient.println("PUT /spduAPI HTTP/1.1");
+		updClient.println("PUT /api/upd HTTP/1.1");
 		updClient.print("Host: ");
 		updClient.write(host);
 		updClient.println();
@@ -323,7 +323,7 @@ int sendUpdate(IPAddress ip) {
 
 		updClient.println(tlength + N_BLOCK);
 		updClient.println();
-		updClient.write(buf, tlength);
+		updClient.write(msg, tlength);
 		updClient.write(ivInit, N_BLOCK);
 		delay(100);
 
@@ -534,7 +534,7 @@ void loop()
 			resetFunc();
 		}
 		
-		updateDelay.start(600000);
+		updateDelay.start(20000);
 		Serial.println(updateDelay.remaining());
 		swServer.flush();
 	}
