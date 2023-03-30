@@ -8,6 +8,7 @@
 #include "avr/wdt.h"
 // #include "base64.hpp"
 #include "utility/w5100.h"
+#include "ArduinoHttpClient.h"
 // #include "secrets.h"
 // #include "EEPROM.h"
 
@@ -29,11 +30,11 @@ byte crypt = 0;
 int fail_count = 0;
 millisDelay updateDelay;
 int tmp = 0;
-int tmp1 = 0;
-char inputChar;
+// int tmp1 = 0;
+// char inputChar;
 char buf[80];
 // char msg[80];
-char big_buf[300];
+// char big_buf[300];
 // byte iv[N_BLOCK], ivInit[N_BLOCK];
 int relayPins[] = {6, 7, 8, 9};
 int outletStates[] = {1, 1, 1, 1};
@@ -50,16 +51,16 @@ EthernetServer swServer(1234);
 // IPAddress updSrvAddr(192, 168, 0, 113);
 #ifndef DEBUG
 static const char conn_string[] = "hosts.spduapi.azurewebsites.net";
-static const char host[] = "spduapi.azurewebsites.net";
+// static const char host[] = "spduapi.azurewebsites.net";
 #else
 static const char conn_string[] = "10.10.0.156";
-static const char host[] = "10.10.0.156:6969";
+// static const char host[] = "10.10.0.156:6969";
 #endif
 const char *conTarget;
 
 int srvPort = 6969;
 // int srvPort = 7071;
-
+HttpClient httpClient(updClient, conn_string, srvPort);
 // AES aes128;
 
 
@@ -235,12 +236,12 @@ int setMsg(char *msg, int len, IPAddress ip) {
 	// Serial.println((char*)aesKey_in_new);
 	// tmp = tmp + b64_len;
 	// Serial.printf("+++ size - %d +++\n%s\n", tmp, msg);
-	tmp1 = sprintf(&msg[tmp], ",\"state\": [%d, %d, %d, %d]} ", EXPAND_OUTLET_ARRAY(outletStates));
+	sprintf(&msg[tmp], ",\"state\": [%d, %d, %d, %d]}", EXPAND_OUTLET_ARRAY(outletStates));
 	// Serial.printf("[%d, %d, %d, %d]\n", outletStates[0], outletStates[1], outletStates[2], outletStates[3]);
 	// Serial.printf("[%d, %d, %d, %d]\n", EXPAND_OUTLET_ARRAY(outletStates));
 	// memcpy(&buf[tmp], "\"}", 2);
 	// Serial.printf("added %d bytes\n", tmp1);
-	tmp += tmp1;
+	// tmp += tmp1;
 	// Serial.printf("+++ size - %d +++\n%s\n", tmp, msg);
 	tmp = len - 1;
 	while(tmp && !msg[tmp]) {
@@ -290,85 +291,111 @@ int sendUpdate(IPAddress ip) {
 	// memcpy(iv, ivInit, N_BLOCK);
 	// encrypt((byte *)msg, (byte*)buf, (byte*)aesKey_out, iv, tlength);
 	// memcpy(iv, i)
-	updClient.flush();
+	// updClient.flush();
 	// delay(100);
-	tmp = 0;
-	while (tmp < 10) {
-			conTarget = (char *)conn_string;
-			if (!updClient.connect(conTarget, srvPort)) {
-				delay(100);
-				tmp++;
-				Serial.print(F("retry "));
-				Serial.println(tmp);
-			} else {
-				break;
-			}
-		// conTarget = (byte *)conn_string;
+	// tmp = 0;
+	// while (tmp < 10) {
+	// 		conTarget = (char *)conn_string;
+	// 		if (!updClient.connect(conTarget, srvPort)) {
+	// 			delay(100);
+	// 			tmp++;
+	// 			Serial.print(F("retry "));
+	// 			Serial.println(tmp);
+	// 		} else {
+	// 			break;
+	// 		}
+	// 	// conTarget = (byte *)conn_string;
 		
-	}
-	if (updClient.connected()) {
+	// }
+	// if (updClient.connected()) {
 		// memset(msg, 0, sizeof(msg));
 		// delay(100);
-		Serial.println(F("\nconnected"));
+		// Serial.println(F("\nconnected"));
 
-		updClient.flush();
-		if (!updClient.availableForWrite()) {
-			Serial.println(F("Client err."));
-			return -1;
-		}
+		// updClient.flush();
+		// if (!updClient.availableForWrite()) {
+		// 	Serial.println(F("Client err."));
+		// 	return -1;
+		// }
 		Serial.print(F("sending addr upd"));
-		memset(big_buf, 0, sizeof(big_buf));
-		tmp = snprintf(big_buf, sizeof(big_buf), "POST /api/upd HTTP/1.1\n"
-				"User-Agent: Arduino/1.0\n"
-				"Accept: */*\n"
-				"Host: %s\n"
-				"Connection: keep-alive\n"
-				"Content-Type: text/html; charset=utf-8;\n"
-				"Content-Length: %d\n\n", host, (tlength+1));
-		// updClient.println("PUT /api/spdu HTTP/2.0");
+		// memset(big_buf, 0, sizeof(big_buf));
+		// String data = "GET /api/upd HTTP/1.1\r\n";
+		// // updClient.write(data.begin(), data.length());
+		// // data = "User-Agent: Arduino/1.0\r\n";
+		// data += "User-Agent: Arduino/1.0\r\n";
+		// // updClient.write(data.begin(), data.length());
+		// // data = "Accept: */*\r\n";
+		// data += "Accept: */*\r\n";
+		// // updClient.write(data.begin(), data.length());
+		// // data ="Host: ";//%s\n";;
+		// data +="Host: ";
+		// data += host;
+		// updClient.write(data.begin(), data.length());
+		// data = "\r\nConnection: close\r\n\r\n";
+		// // data += "\nConnection: close\r\n";
+		// updClient.write(data.begin(), data.length());
+		// 		data += "Content-Type: text/html; charset=utf-8;\n";
+		// 		data += "Content-Length: ";//%d\n\n", host, (tlength+1));
+		// 		data += tlength;
+		// 		data += "\n\n";
+		// tmp = snprintf(big_buf, sizeof(big_buf), "POST /api/upd HTTP/1.1\r\n"
+		// 		"User-Agent: Arduino/1.0\r\n"
+		// 		"Accept: */*\r\n"
+		// 		"Host: %s\r\n"
+		// 		"Connection: keep-alive\r\n"
+		// 		"Content-Type: text/html; charset=utf-8;\r\n"
+		// 		"Content-Length: %d\r\n\r\n", host, (tlength));
+		// updClient.println("GET /api/upd HTTP/1.1");
 		// updClient.print("Host: ");
 		// updClient.write(host);
-		// updClient.println();
-		// updClient.println("User-Agent: Arduino/1.0");
+		// // updClient.println();
+		// updClient.println("\nUser-Agent: Arduino/1.0");
 		// updClient.println("Connection: close");
 		// updClient.println("Content-Type: application/x-www-form-urlencoded;");
 		// updClient.print("Content-Length: ");
 
 		// Serial.print(F("msg length - "));
 		// Serial.println(tlength);
-
+		httpClient.post("/api/upd", "text/html", buf);
 		// updClient.println(tlength);
+		// updClient.println("\n");
 		// Ethernet.MACAddress(mac);
 		// printArr(mac, 6);
-		Serial.printf("+++ header length - %d +++\n%s\n", tmp, big_buf);
-		tmp1 = snprintf(&big_buf[tmp], sizeof(big_buf) - tmp, "%s\0", buf);
-		Serial.printf("+++ added bytes - %d\n===============\n%s +++\n%s\n", tmp1, buf, big_buf);
-		updClient.write(big_buf);
+		// Serial.printf("+++ header length - %d +++\n%s\n", tmp, big_buf);
+		// tmp += snprintf(&big_buf[tmp], sizeof(big_buf) - tmp, "%s\0", buf);
+		// Serial.printf("+++ added bytes - %d\n===============\n%s +++\n%s\n", tmp1, buf, big_buf);
+		// updClient.write(data.c_str(), data.length());
+		// data = buf;/
+		// updClient.write(big_buf); 
 		// updClient.write(buf, tlength);
 		// updClient.write(ivInit, N_BLOCK);
-		updClient.flush();
-		delay(500);
+		// updClient.write(data.begin(), data.length());
+		// updClient.flush();
+		// delay(500);
 
 		Serial.println(F("server response"));
-		char c;
-		memset(big_buf, 0, sizeof(big_buf));
-		while (updClient.available()) {
-			c = updClient.read((byte *)big_buf, sizeof(big_buf));
-			Serial.printf("read %d bytes", (int )c); Serial.print(big_buf);
-			Serial.print(big_buf);
-		}
+		// char c;
+		// memset(big_buf, 0, sizeof(big_buf));
+		// while (updClient.available()) {
+		// 	c = updClient.read((byte *)big_buf, sizeof(big_buf));
+		// 	Serial.printf("read %d bytes", (int )c); Serial.print(big_buf);
+		// 	Serial.print(big_buf);
+		// }
+		int code = httpClient.responseStatusCode();
+		String response = httpClient.responseBody();
+		Serial.printf("code - %d, body: \n%s\n", code, response.c_str());
 		Serial.printf(F("end server response\n"));
-	} else {
-		if (fail_count > 2)
-			return -2;
+	// } else {
+	// 	if (fail_count > 2)
+	// 		return -2;
 
-		Serial.printf(F("could not connect to update server\n"));
-		Serial.printf("%d\n", fail_count);
-		fail_count++;
-	}
+	// 	Serial.printf(F("could not connect to update server\n"));
+	// 	Serial.printf("%d\n", fail_count);
+	// 	fail_count++;
+	// }
 	tmp = 0;
-	updClient.flush();
-	updClient.stop();
+	// updClient.flush();
+	// updClient.stop();
 	ShowSockStatus();
 	return 0;
 }
